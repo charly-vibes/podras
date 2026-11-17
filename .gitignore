@@ -1,0 +1,11 @@
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
+
+# tool data dirs (managed by `ddl init --gates`)
+.testaruda/
+.pretender/
