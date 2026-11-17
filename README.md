@@ -1,5 +1,7 @@
 # podras
 
+> "Tal vez te olvides de mí, tal vez me olvide de ti…" — from *No podrás*, Cristian Castro
+
 **Project status, distilled** — a deterministic CLI that answers "what's happening in this project?" for humans coming back cold and for AI coding agents, from one git-committed source.
 
 ## Objective
@@ -33,4 +35,4 @@ Design phase — no implementation yet.
 
 ## Naming
 
-Deterministic, per-repo, a lens you point at a project. (Resembles *podrá* — "it will be able to"; the tool tells you what the project can do next.)
+Named with a nod to *No podrás* (Cristian Castro) — "tal vez te olvides de mí…" — forgetting is fine; coming back cold should still tell you what's happening. Deterministic, per-repo, a lens you point at a project. (Resembles *podrá* — "it will be able to"; the tool tells you what the project can do next.)
