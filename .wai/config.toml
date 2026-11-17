@@ -1,0 +1,9 @@
+plugins = []
+
+[project]
+name = "podras"
+version = "2026.11.11"
+description = ""
+tool_commit = "8590127"
+
+[llm]
