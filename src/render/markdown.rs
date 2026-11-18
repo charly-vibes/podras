@@ -14,8 +14,8 @@ use chrono::{DateTime, SecondsFormat, Utc};
 
 use crate::error::Result;
 use crate::model::{
-    Brief, HealthBasis, HealthStatus, ParkedItem, RecentEvent, RoadmapWarningKind, SignalKind,
-    SourceName, SourceState, Staleness, WorkItem,
+    Brief, HealthBasis, HealthStatus, ParkedItem, RecentEvent, RoadmapView, RoadmapWarningKind,
+    SignalKind, SourceName, SourceState, Staleness, WorkItem,
 };
 
 /// The explicit placeholder rendered for an empty section or absent value.
@@ -133,25 +133,32 @@ fn render_health(out: &mut String, brief: &Brief) {
             ),
         );
     }
-    // The lens's advisory no-go candidate surfaces once, deterministically:
-    // the first firing warning in the lens's code-then-subject-then-detail
-    // order. It stays advisory and never becomes a signal or verdict.
-    if let Some(roadmap) = &brief.roadmap
-        && let Some(warning) = roadmap
-            .warnings
-            .iter()
-            .find(|warning| warning.code == RoadmapWarningKind::NoGoViolationCandidate)
-    {
-        push_text(
-            out,
-            &format!(
-                "- no-go risk: {} — {}",
-                oneline(&warning.subject),
-                oneline(&warning.detail)
-            ),
-        );
+    // The lens's advisory no-go candidate surfaces once, deterministically.
+    if let Some(roadmap) = &brief.roadmap {
+        push_no_go_risk(out, roadmap);
     }
     out.push('\n');
+}
+
+/// The lens's advisory no-go candidate surfaces once, deterministically: the
+/// first firing warning in the lens's code-then-subject-then-detail order. It
+/// stays advisory and never becomes a signal or verdict.
+fn push_no_go_risk(out: &mut String, roadmap: &RoadmapView) {
+    let Some(warning) = roadmap
+        .warnings
+        .iter()
+        .find(|warning| warning.code == RoadmapWarningKind::NoGoViolationCandidate)
+    else {
+        return;
+    };
+    push_text(
+        out,
+        &format!(
+            "- no-go risk: {} — {}",
+            oneline(&warning.subject),
+            oneline(&warning.detail)
+        ),
+    );
 }
 
 fn render_sources(out: &mut String, brief: &Brief) {
