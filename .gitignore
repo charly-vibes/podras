@@ -9,3 +9,6 @@
 # tool data dirs (managed by `ddl init --gates`)
 .testaruda/
 .pretender/
+
+# Rust build output
+/target

@@ -1,0 +1,32 @@
+[package]
+name = "podras"
+version = "0.1.0"
+edition = "2024"
+description = "Per-repository project status brief for humans and AI agents"
+license = "Apache-2.0"
+
+[[bin]]
+name = "podras"
+path = "src/main.rs"
+
+[lib]
+name = "podras"
+path = "src/lib.rs"
+
+[dependencies]
+genesis-vibes = "0.13.2"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+schemars = "1"
+thiserror = "2"
+miette = { version = "7", features = ["fancy"] }
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+jsonschema = "0.61"
