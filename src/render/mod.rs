@@ -12,6 +12,7 @@ use crate::model::Brief;
 
 pub mod envelope;
 pub mod markdown;
+pub mod roadmap;
 
 /// Supported render targets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

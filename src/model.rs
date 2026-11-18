@@ -348,6 +348,185 @@ pub struct Warning {
     pub detail: String,
 }
 
+/// Render bound for the roadmap's bet list.
+pub const ROADMAP_BETS_BOUND: usize = 5;
+/// Render bound for the roadmap's no-go list.
+pub const ROADMAP_NO_GOS_BOUND: usize = 5;
+
+/// Time horizon a bet is committed to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Horizon {
+    /// The work being done right now.
+    Now,
+    /// The next bet after the current one.
+    Next,
+    /// Explicitly not now; never a requirement.
+    Later,
+}
+
+/// Lifecycle state of a bet.
+///
+/// Declaration order is the state machine's own order, not the render order;
+/// `roadmap` sorts by status rank, which promotes `building` and `committed`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BetStatus {
+    /// Being shaped; not yet admitted.
+    Shaping,
+    /// Admitted with a dated decision.
+    Committed,
+    /// Active and in flight.
+    Building,
+    /// Paused with a mandatory revive trigger.
+    Deferred,
+    /// Delivered.
+    Shipped,
+    /// Abandoned, with a reason.
+    Killed,
+}
+
+/// Declared enforcement tier of a no-go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Enforcement {
+    /// A real automated check exists.
+    Automated,
+    /// A human review is the enforcement.
+    HumanReview,
+}
+
+/// Identity row of the roadmap lens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct IdentityView {
+    /// Link to the prose that states what the project ought to be.
+    pub path: String,
+    /// When a human last reviewed the identity.
+    #[schemars(with = "String")]
+    pub last_reviewed: NaiveDate,
+    /// When the next review is due; absent means unscheduled.
+    #[schemars(with = "Option<String>")]
+    pub next_review: Option<NaiveDate>,
+    /// Staleness decided by `next_review` alone.
+    pub staleness: Staleness,
+}
+
+/// One bet as the lens renders it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct BetView {
+    /// Slug identifier, unique among bets.
+    pub id: String,
+    /// Imperative title, at most 60 characters.
+    pub title: String,
+    /// What changes if the bet lands.
+    pub outcome: String,
+    /// Declared horizon; authoritative, never computed.
+    pub horizon: Horizon,
+    /// Appetite in weeks; the circuit breaker escalates past 1.25x.
+    pub appetite_weeks: u32,
+    /// Human owner.
+    pub owner: String,
+    /// The single tracker epic backing the bet, when declared.
+    pub epic: Option<String>,
+    /// Lifecycle state.
+    pub status: BetStatus,
+    /// Admission decision date.
+    #[schemars(with = "String")]
+    pub admitted_at: NaiveDate,
+    /// When a human last reviewed the bet.
+    #[schemars(with = "String")]
+    pub last_reviewed: NaiveDate,
+    /// Dated review-or-kill decision; required while committed or building.
+    #[schemars(with = "Option<String>")]
+    pub review_or_kill: Option<NaiveDate>,
+    /// Trigger that revives a deferred bet.
+    pub revive_when: Option<String>,
+    /// Why the bet was killed, when it was.
+    pub killed_reason: Option<String>,
+}
+
+/// One no-go as the lens renders it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct NoGoView {
+    /// Slug identifier, unique among no-gos.
+    pub id: String,
+    /// Why the boundary exists.
+    pub reason: String,
+    /// What the boundary covers.
+    pub scope: String,
+    /// Declared enforcement tier.
+    pub enforcement: Enforcement,
+    /// What reversal requires; never an edit of this entry.
+    pub revoke_by: String,
+    /// Whole-token terms matched against bead titles and labels.
+    pub match_terms: Vec<String>,
+}
+
+/// Earliest outstanding review per source; never a computed deadline.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ReviewDue {
+    /// Identity's declared next review, when declared.
+    #[schemars(with = "Option<String>")]
+    pub identity: Option<NaiveDate>,
+    /// Earliest `review_or_kill` among active bets.
+    #[schemars(with = "Option<String>")]
+    pub roadmap: Option<NaiveDate>,
+}
+
+/// Named roadmap warnings; each is advisory, never a verdict.
+///
+/// Declaration order is the deterministic sort order of the warning list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RoadmapWarningKind {
+    /// An active bet outlived its appetite.
+    BetAgeExceedsAppetite,
+    /// An active bet passed 1.25x its appetite.
+    CircuitBreakerDue,
+    /// A committed bet has no tracker epic.
+    BetEpicMissing,
+    /// A bet is active while its epic is closed.
+    BetEpicClosedNotRetired,
+    /// A bet's epic has not changed in fourteen days.
+    BetNoTransition,
+    /// The declared horizon contradicts the epic's state.
+    HorizonEpicMismatch,
+    /// An open bead matches a no-go's terms.
+    NoGoViolationCandidate,
+    /// Identity declares no next review, so staleness is unknown.
+    IdentityReviewOverdue,
+    /// An active bet's `review_or_kill` date has passed.
+    RoadmapReviewOverdue,
+}
+
+/// One roadmap warning with its subject and evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct RoadmapWarning {
+    /// Which warning fired.
+    pub code: RoadmapWarningKind,
+    /// Bet, no-go, or `identity`.
+    pub subject: String,
+    /// Why it fired.
+    pub detail: String,
+}
+
+/// The roadmap lens: identity, bets, boundaries, and advisory warnings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct RoadmapView {
+    /// What the project ought to be, and how stale that review is.
+    pub identity: IdentityView,
+    /// Bounded, deterministically ordered bets.
+    pub bets: Vec<BetView>,
+    /// Bounded, deterministically ordered no-gos.
+    pub no_gos: Vec<NoGoView>,
+    /// Earliest outstanding review per source.
+    pub review_due: ReviewDue,
+    /// All advisory warnings, never truncated.
+    pub warnings: Vec<RoadmapWarning>,
+    /// Declared truncation of the bounded lists.
+    pub truncation: Truncation,
+}
+
 /// The complete typed brief envelope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Brief {
@@ -389,6 +568,9 @@ pub struct Brief {
     pub source_hash: Option<String>,
     /// Stable per-source warnings; never truncated.
     pub warnings: Vec<Warning>,
+    /// Roadmap lens, present only when `.podras/roadmap.toml` exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roadmap: Option<RoadmapView>,
 }
 
 pub use crate::hash::{semantic_payload, source_hash};

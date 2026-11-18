@@ -1,0 +1,9 @@
+id = "bet-lifecycle-enums"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "bet_lifecycle_enums" }]

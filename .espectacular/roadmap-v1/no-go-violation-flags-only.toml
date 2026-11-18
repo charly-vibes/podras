@@ -1,0 +1,9 @@
+id = "no-go-violation-flags-only"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "no_go_violation_flags_only" }]

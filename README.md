@@ -10,6 +10,7 @@ Build a small, deterministic, per-repo CLI that:
 
 - **brief** — renders a fixed-section project status (what's happening, what's next, what's blocked, what's parked) for a human and a machine-readable envelope for agents
 - **focus / park** — records explicit intent (what we're committed to now, what we're deliberately not doing)
+- **roadmap** — renders the separate why-lens (identity, bets, no-gos) read-only from `.podras/roadmap.toml`; `--write` emits `ROADMAP.md` and `ROADMAP.json`
 - **harvest** — derives status from sources that already exist: beads tracker, openspec changes, git history, whisper session notes
 
 Per-repo, git-committed state (`.beads`-style): clone a repo and its orientation context is there. Portfolio view (many repos) is computed on the fly, never stored.
@@ -26,12 +27,14 @@ Design principle: **project status is a projection of evidence plus explicit hum
 
 ## Status
 
-Design phase — no implementation yet.
-
-- Design decisions resolved in grill sessions (see [docs/design.md](docs/design.md))
-- Investigation `pm-status-tool-structure` (12-provider corpus) synthesized → `charly/catitas/catitas/data/synthesized/pm-status-tool-structure.md`
-- Investigation `value-prop-roadmap` in flight (why/where-going layer: pitch + roadmap recording)
-- Next: openspec proposal for brief v1 (read path first)
+Implemented through v1.1 (brief read path, envelope, committed renders,
+focus/park/init, harvest, freshness hardening, drift gate) and the roadmap
+lens read path (stage ⑥: `podras roadmap`, `.podras/roadmap.toml`, optional
+`roadmap` object in the envelope, `ROADMAP.md`/`ROADMAP.json` via `--write`).
+Next stages: ⑦ roadmap curation verbs (`bet add|admit|defer|kill`) and ⑧ the
+harvest extension. Design decisions are recorded in
+[docs/design.md](docs/design.md); the lens change lives in
+`openspec/changes/add-roadmap-lens-read-path/`.
 
 ## Naming
 

@@ -42,6 +42,9 @@ struct RawIssue {
     updated_at: Option<String>,
     #[serde(default)]
     dependencies: Vec<RawDependency>,
+    /// Labels attached to the issue; matched as whole tokens by no-gos.
+    #[serde(default)]
+    labels: Vec<String>,
     /// Recorded for the brief contract; `WorkItem` exposes no file list yet.
     #[serde(rename = "metadata", default)]
     _metadata: Option<RawMetadata>,
@@ -61,6 +64,54 @@ struct RawDependency {
 struct RawMetadata {
     #[serde(rename = "files", default)]
     _files: Option<Vec<String>>,
+}
+
+/// One tracker record as the roadmap lens consumes it.
+///
+/// The brief's `WorkItem` views are shaped for queues; the roadmap asks a
+/// different question of the same export — is this bet's epic still open and
+/// moving — so the record keeps status, labels, and update time verbatim.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssueRecord {
+    /// Issue identifier.
+    pub id: String,
+    /// Issue title, empty when the row omitted it.
+    pub title: String,
+    /// Tracker status as reported, empty when the row omitted it.
+    pub status: String,
+    /// Labels attached to the issue.
+    pub labels: Vec<String>,
+    /// Last update timestamp, when the row reported a parseable one.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// True unless the status is `closed` or `done`.
+    pub open: bool,
+}
+
+/// Read every decodable issue row as a lifecycle record, best effort.
+///
+/// Absence and unreadability both yield an empty list: the roadmap lens treats
+/// "no tracker evidence" as "cannot judge the epic" and stays silent instead of
+/// degrading the whole lens to an error. Malformed rows are skipped exactly as
+/// [`read`] skips them.
+pub fn read_records(repo: &Path) -> Vec<IssueRecord> {
+    let Ok(text) = fs::read_to_string(repo.join(ISSUES_PATH)) else {
+        return Vec::new();
+    };
+    parse_issues(&text)
+        .0
+        .into_iter()
+        .map(|issue| {
+            let open = is_open(issue.status.as_deref());
+            IssueRecord {
+                id: issue.id.unwrap_or_default(),
+                title: issue.title.unwrap_or_default(),
+                status: issue.status.unwrap_or_default(),
+                labels: issue.labels,
+                updated_at: parse_instant(issue.updated_at.as_deref()),
+                open,
+            }
+        })
+        .collect()
 }
 
 /// Read the beads export for the repository.

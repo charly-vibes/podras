@@ -7,6 +7,8 @@
 //!   `brief --json` from a fresh process that never leaks whisper content;
 //! - staleness faults (`experiments/fault_injection.rs`): closed focus, deleted
 //!   tracker, edited spec, aged export;
+//! - roadmap lens (`experiments/roadmap.rs`): determinism, cold return, and
+//!   no-go discipline for the read-only lens;
 //! - fixtures and render assertions shared by all three (`experiments/fixtures.rs`).
 //!
 //! Rationale: these experiments are the acceptance gate in `docs/design.md`, so
@@ -25,3 +27,9 @@ mod cold_start;
 
 #[path = "experiments/fault_injection.rs"]
 mod fault_injection;
+
+#[path = "roadmap/fixtures.rs"]
+mod roadmap_fixtures;
+
+#[path = "experiments/roadmap.rs"]
+mod roadmap;

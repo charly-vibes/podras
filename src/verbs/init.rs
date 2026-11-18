@@ -69,6 +69,8 @@ const BLOCK_CONTENT: &str = "\n## podras
 - Beads owns issue lifecycle; focus is intent, not permission.
 - Never silently change focus or unpark an item; ask the human and use the verbs.
 - Never hand-edit committed renders; regenerate them with `podras brief --write`.
+- Roadmap `later`/`shaping`/`deferred` items are not requirements; no-gos are hard constraints.
+- Never edit `.podras/roadmap.toml`; admission, deferral and kill are human decisions.
 ";
 
 /// Initialize podras state for the repository.

@@ -162,6 +162,7 @@ pub(super) fn envelope(
         head_sha: inputs.git.as_ref().and_then(|git| git.head_sha.clone()),
         source_hash: None,
         warnings,
+        roadmap: None,
     }
 }
 

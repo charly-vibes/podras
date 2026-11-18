@@ -83,6 +83,17 @@
         "$ref": "#/$defs/RecentEvent"
       }
     },
+    "roadmap": {
+      "description": "Roadmap lens, present only when `.podras/roadmap.toml` exists.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RoadmapView"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "schema_version": {
       "description": "Envelope schema identifier.",
       "type": "string"
@@ -131,6 +142,124 @@
     "warnings"
   ],
   "$defs": {
+    "BetStatus": {
+      "description": "Lifecycle state of a bet.\n\nDeclaration order is the state machine's own order, not the render order;\n`roadmap` sorts by status rank, which promotes `building` and `committed`.",
+      "oneOf": [
+        {
+          "description": "Being shaped; not yet admitted.",
+          "type": "string",
+          "const": "shaping"
+        },
+        {
+          "description": "Admitted with a dated decision.",
+          "type": "string",
+          "const": "committed"
+        },
+        {
+          "description": "Active and in flight.",
+          "type": "string",
+          "const": "building"
+        },
+        {
+          "description": "Paused with a mandatory revive trigger.",
+          "type": "string",
+          "const": "deferred"
+        },
+        {
+          "description": "Delivered.",
+          "type": "string",
+          "const": "shipped"
+        },
+        {
+          "description": "Abandoned, with a reason.",
+          "type": "string",
+          "const": "killed"
+        }
+      ]
+    },
+    "BetView": {
+      "description": "One bet as the lens renders it.",
+      "type": "object",
+      "properties": {
+        "admitted_at": {
+          "description": "Admission decision date.",
+          "type": "string"
+        },
+        "appetite_weeks": {
+          "description": "Appetite in weeks; the circuit breaker escalates past 1.25x.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "epic": {
+          "description": "The single tracker epic backing the bet, when declared.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "horizon": {
+          "description": "Declared horizon; authoritative, never computed.",
+          "$ref": "#/$defs/Horizon"
+        },
+        "id": {
+          "description": "Slug identifier, unique among bets.",
+          "type": "string"
+        },
+        "killed_reason": {
+          "description": "Why the bet was killed, when it was.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_reviewed": {
+          "description": "When a human last reviewed the bet.",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "What changes if the bet lands.",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Human owner.",
+          "type": "string"
+        },
+        "review_or_kill": {
+          "description": "Dated review-or-kill decision; required while committed or building.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revive_when": {
+          "description": "Trigger that revives a deferred bet.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "description": "Lifecycle state.",
+          "$ref": "#/$defs/BetStatus"
+        },
+        "title": {
+          "description": "Imperative title, at most 60 characters.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "outcome",
+        "horizon",
+        "appetite_weeks",
+        "owner",
+        "status",
+        "admitted_at",
+        "last_reviewed"
+      ]
+    },
     "CurationStamp": {
       "description": "Curation timestamps exposed by the brief.\n\n`updated_at` is the file mtime of the last verb write; `confirmed_at` is the\nnewest human `confirmed_at` among health and focus/parked entries. Keeping\nthem separate is what makes \"unchanged\" differ from \"unconfirmed\".",
       "type": "object",
@@ -150,6 +279,21 @@
           ]
         }
       }
+    },
+    "Enforcement": {
+      "description": "Declared enforcement tier of a no-go.",
+      "oneOf": [
+        {
+          "description": "A real automated check exists.",
+          "type": "string",
+          "const": "automated"
+        },
+        {
+          "description": "A human review is the enforcement.",
+          "type": "string",
+          "const": "human_review"
+        }
+      ]
     },
     "Health": {
       "description": "Layered health verdict plus its evidence.",
@@ -236,6 +380,97 @@
         }
       ]
     },
+    "Horizon": {
+      "description": "Time horizon a bet is committed to.",
+      "oneOf": [
+        {
+          "description": "The work being done right now.",
+          "type": "string",
+          "const": "now"
+        },
+        {
+          "description": "The next bet after the current one.",
+          "type": "string",
+          "const": "next"
+        },
+        {
+          "description": "Explicitly not now; never a requirement.",
+          "type": "string",
+          "const": "later"
+        }
+      ]
+    },
+    "IdentityView": {
+      "description": "Identity row of the roadmap lens.",
+      "type": "object",
+      "properties": {
+        "last_reviewed": {
+          "description": "When a human last reviewed the identity.",
+          "type": "string"
+        },
+        "next_review": {
+          "description": "When the next review is due; absent means unscheduled.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Link to the prose that states what the project ought to be.",
+          "type": "string"
+        },
+        "staleness": {
+          "description": "Staleness decided by `next_review` alone.",
+          "$ref": "#/$defs/Staleness"
+        }
+      },
+      "required": [
+        "path",
+        "last_reviewed",
+        "staleness"
+      ]
+    },
+    "NoGoView": {
+      "description": "One no-go as the lens renders it.",
+      "type": "object",
+      "properties": {
+        "enforcement": {
+          "description": "Declared enforcement tier.",
+          "$ref": "#/$defs/Enforcement"
+        },
+        "id": {
+          "description": "Slug identifier, unique among no-gos.",
+          "type": "string"
+        },
+        "match_terms": {
+          "description": "Whole-token terms matched against bead titles and labels.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason": {
+          "description": "Why the boundary exists.",
+          "type": "string"
+        },
+        "revoke_by": {
+          "description": "What reversal requires; never an edit of this entry.",
+          "type": "string"
+        },
+        "scope": {
+          "description": "What the boundary covers.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "reason",
+        "scope",
+        "enforcement",
+        "revoke_by",
+        "match_terms"
+      ]
+    },
     "ParkedItem": {
       "description": "A parked item, owned exclusively by curation state.",
       "type": "object",
@@ -297,6 +532,146 @@
         "sha",
         "committed_at",
         "subject"
+      ]
+    },
+    "ReviewDue": {
+      "description": "Earliest outstanding review per source; never a computed deadline.",
+      "type": "object",
+      "properties": {
+        "identity": {
+          "description": "Identity's declared next review, when declared.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "roadmap": {
+          "description": "Earliest `review_or_kill` among active bets.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "RoadmapView": {
+      "description": "The roadmap lens: identity, bets, boundaries, and advisory warnings.",
+      "type": "object",
+      "properties": {
+        "bets": {
+          "description": "Bounded, deterministically ordered bets.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BetView"
+          }
+        },
+        "identity": {
+          "description": "What the project ought to be, and how stale that review is.",
+          "$ref": "#/$defs/IdentityView"
+        },
+        "no_gos": {
+          "description": "Bounded, deterministically ordered no-gos.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NoGoView"
+          }
+        },
+        "review_due": {
+          "description": "Earliest outstanding review per source.",
+          "$ref": "#/$defs/ReviewDue"
+        },
+        "truncation": {
+          "description": "Declared truncation of the bounded lists.",
+          "$ref": "#/$defs/Truncation"
+        },
+        "warnings": {
+          "description": "All advisory warnings, never truncated.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoadmapWarning"
+          }
+        }
+      },
+      "required": [
+        "identity",
+        "bets",
+        "no_gos",
+        "review_due",
+        "warnings",
+        "truncation"
+      ]
+    },
+    "RoadmapWarning": {
+      "description": "One roadmap warning with its subject and evidence.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Which warning fired.",
+          "$ref": "#/$defs/RoadmapWarningKind"
+        },
+        "detail": {
+          "description": "Why it fired.",
+          "type": "string"
+        },
+        "subject": {
+          "description": "Bet, no-go, or `identity`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "subject",
+        "detail"
+      ]
+    },
+    "RoadmapWarningKind": {
+      "description": "Named roadmap warnings; each is advisory, never a verdict.\n\nDeclaration order is the deterministic sort order of the warning list.",
+      "oneOf": [
+        {
+          "description": "An active bet outlived its appetite.",
+          "type": "string",
+          "const": "bet_age_exceeds_appetite"
+        },
+        {
+          "description": "An active bet passed 1.25x its appetite.",
+          "type": "string",
+          "const": "circuit_breaker_due"
+        },
+        {
+          "description": "A committed bet has no tracker epic.",
+          "type": "string",
+          "const": "bet_epic_missing"
+        },
+        {
+          "description": "A bet is active while its epic is closed.",
+          "type": "string",
+          "const": "bet_epic_closed_not_retired"
+        },
+        {
+          "description": "A bet's epic has not changed in fourteen days.",
+          "type": "string",
+          "const": "bet_no_transition"
+        },
+        {
+          "description": "The declared horizon contradicts the epic's state.",
+          "type": "string",
+          "const": "horizon_epic_mismatch"
+        },
+        {
+          "description": "An open bead matches a no-go's terms.",
+          "type": "string",
+          "const": "no_go_violation_candidate"
+        },
+        {
+          "description": "Identity declares no next review, so staleness is unknown.",
+          "type": "string",
+          "const": "identity_review_overdue"
+        },
+        {
+          "description": "An active bet's `review_or_kill` date has passed.",
+          "type": "string",
+          "const": "roadmap_review_overdue"
+        }
       ]
     },
     "Signal": {

@@ -18,12 +18,15 @@ pub mod health;
 pub mod model;
 pub mod readers;
 pub mod render;
+pub mod roadmap;
 pub mod verbs;
 pub mod write;
 
 pub use error::{Error, Result};
 pub use model::{
-    Brief, CurationStamp, Health, HealthBasis, HealthStatus, ParkedItem, RecentEvent,
-    SCHEMA_VERSION, Signal, SignalKind, SourceName, SourceState, SourceStatus, Staleness,
-    Truncation, Warning, WorkItem,
+    BetStatus, BetView, Brief, CurationStamp, Enforcement, Health, HealthBasis, HealthStatus,
+    Horizon, IdentityView, NoGoView, ParkedItem, ROADMAP_BETS_BOUND, ROADMAP_NO_GOS_BOUND,
+    RecentEvent, ReviewDue, RoadmapView, RoadmapWarning, RoadmapWarningKind, SCHEMA_VERSION,
+    Signal, SignalKind, SourceName, SourceState, SourceStatus, Staleness, Truncation, Warning,
+    WorkItem,
 };

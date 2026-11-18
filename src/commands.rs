@@ -3,6 +3,7 @@
 //! Responsibilities:
 //! - own one function per subcommand, operating on a resolved repository root;
 //! - wire the brief read path: context, collect, assemble, render, optional write;
+//! - wire the roadmap lens read path and its separate render/write pair;
 //! - emit the JSON Schema for the brief model.
 //!
 //! Rationale: keeping commands in the library lets integration tests and the
@@ -14,9 +15,10 @@ use std::process::Command;
 
 use chrono::NaiveDate;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::model::Brief;
 use crate::readers::{self, ReadContext};
+use crate::roadmap::file::ROADMAP_REL_PATH;
 
 /// Render the brief for the repository.
 ///
@@ -36,12 +38,78 @@ pub fn brief(
     out_dir: Option<&Path>,
 ) -> Result<()> {
     let inputs = readers::collect(&read_context(repo, as_of))?;
-    let brief = crate::brief::assemble(&inputs);
+    let brief = assemble_with_roadmap(repo, &inputs)?;
     let reentry = inputs
         .whisper
         .as_ref()
         .and_then(|whisper| whisper.next_action.as_deref());
     emit_brief(repo, &brief, reentry, json, write, out_dir)
+}
+
+/// Render the roadmap lens for the repository.
+///
+/// The lens is read-only and additive: `.podras/roadmap.toml` is never
+/// scaffolded or written here, and a malformed file is a hard domain error
+/// rather than a degraded source. Candidates and review dates are rendered,
+/// never inferred; no verb admits, defers, or kills a bet.
+pub fn roadmap(
+    repo: &Path,
+    json: bool,
+    write: bool,
+    as_of: Option<NaiveDate>,
+    out_dir: Option<&Path>,
+) -> Result<()> {
+    let inputs = readers::collect(&read_context(repo, as_of))?;
+    let Some(file) = crate::roadmap::file::load(repo)? else {
+        return Err(Error::Domain {
+            code: "roadmap_missing",
+            message: format!("no {ROADMAP_REL_PATH} for this repository"),
+            suggestion: Some(
+                "create .podras/roadmap.toml with the [identity], [[bets]] and [[no_gos]] tables described in docs/design.md decision 17"
+                    .into(),
+            ),
+        });
+    };
+    let evaluation = inputs.as_of.unwrap_or(inputs.now);
+    let records = crate::readers::beads::read_records(repo);
+    let view = crate::roadmap::assemble(&inputs, &file, &records, evaluation);
+    let brief = crate::roadmap::attach(crate::brief::assemble(&inputs), Some(view));
+
+    let target = out_dir.unwrap_or(repo);
+    if write {
+        crate::write::write_roadmap_renders_to(repo, target, &brief)?;
+    }
+    if json {
+        return print_envelope(&brief);
+    }
+    if write {
+        return print_pair_written(
+            out_dir.is_some(),
+            target,
+            crate::write::ROADMAP_MARKDOWN_FILE,
+            crate::write::ROADMAP_JSON_FILE,
+        );
+    }
+    println!("{}", crate::render::roadmap::render(&brief)?.trim_end());
+    Ok(())
+}
+
+/// Assemble the brief, attaching the roadmap lens when its file exists.
+///
+/// An absent file means the brief carries no `roadmap` object at all; a
+/// present file, even one with zero bets, is a present lens. A malformed file
+/// propagates the loader's domain error, so the lens never silently disappears.
+fn assemble_with_roadmap(repo: &Path, inputs: &crate::brief::BriefInputs) -> Result<Brief> {
+    let Some(file) = crate::roadmap::file::load(repo)? else {
+        return Ok(crate::brief::assemble(inputs));
+    };
+    let evaluation = inputs.as_of.unwrap_or(inputs.now);
+    let records = crate::readers::beads::read_records(repo);
+    let view = crate::roadmap::assemble(inputs, &file, &records, evaluation);
+    Ok(crate::roadmap::attach(
+        crate::brief::assemble(inputs),
+        Some(view),
+    ))
 }
 
 /// Emit the brief: envelope, write report, or narrative, in that precedence.
@@ -74,18 +142,24 @@ fn print_envelope(brief: &Brief) -> Result<()> {
 
 /// Print the names of the two written artifacts.
 fn print_written(named: bool, target: &Path) -> Result<()> {
+    print_pair_written(
+        named,
+        target,
+        crate::write::MARKDOWN_FILE,
+        crate::write::JSON_FILE,
+    )
+}
+
+/// Print two written artifact names, prefixing the directory when named.
+fn print_pair_written(named: bool, target: &Path, markdown: &str, json: &str) -> Result<()> {
     if named {
         println!(
             "wrote {}, {}",
-            target.join(crate::write::MARKDOWN_FILE).display(),
-            target.join(crate::write::JSON_FILE).display()
+            target.join(markdown).display(),
+            target.join(json).display()
         );
     } else {
-        println!(
-            "wrote {}, {}",
-            crate::write::MARKDOWN_FILE,
-            crate::write::JSON_FILE
-        );
+        println!("wrote {markdown}, {json}");
     }
     Ok(())
 }

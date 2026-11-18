@@ -2,6 +2,7 @@
 //!
 //! Responsibilities:
 //! - render and atomically write the committed brief artifacts as one pair;
+//! - write the roadmap lens pair (ROADMAP.md / ROADMAP.json) the same way;
 //! - gate the whisper next-action line on curation `publish_whisper`;
 //! - never merge hand edits into regenerated output.
 //!
@@ -20,6 +21,10 @@ use crate::model::Brief;
 pub const MARKDOWN_FILE: &str = "BRIEF.md";
 /// Committed JSON artifact name.
 pub const JSON_FILE: &str = "BRIEF.json";
+/// Roadmap lens markdown artifact name.
+pub const ROADMAP_MARKDOWN_FILE: &str = "ROADMAP.md";
+/// Roadmap lens JSON artifact name.
+pub const ROADMAP_JSON_FILE: &str = "ROADMAP.json";
 
 /// Write `BRIEF.md` and `BRIEF.json` for the repository.
 ///
@@ -66,6 +71,37 @@ pub fn write_renders_to(
         &[
             (MARKDOWN_FILE, markdown.as_str()),
             (JSON_FILE, json.as_str()),
+        ],
+    )
+}
+
+/// Write `ROADMAP.md` and `ROADMAP.json` into an existing `dir`.
+///
+/// The roadmap narrative carries no whisper content, so `repo` is not a
+/// privacy authority here; it stays in the signature for symmetry with the
+/// brief writer. The directory is never created, and staging plus rename
+/// semantics are the pair writer's, so a failed write leaves both targets
+/// untouched. A missing or non-directory target is a hard error.
+pub fn write_roadmap_renders_to(repo: &Path, dir: &Path, brief: &Brief) -> Result<()> {
+    let _ = repo;
+    if !dir.is_dir() {
+        return Err(Error::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!(
+                "cannot write renders: {} is not an existing directory",
+                dir.display()
+            ),
+        )));
+    }
+
+    let markdown = crate::render::roadmap::render(brief)?;
+    let json = crate::render::envelope::to_json(brief)?;
+
+    write_pair(
+        dir,
+        &[
+            (ROADMAP_MARKDOWN_FILE, markdown.as_str()),
+            (ROADMAP_JSON_FILE, json.as_str()),
         ],
     )
 }

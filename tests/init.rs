@@ -85,6 +85,18 @@ fn first_run_scaffolds_curation_and_managed_block() {
         agents.contains("committed renders"),
         "block forbids hand-editing committed renders: {agents}"
     );
+    assert!(
+        agents.contains(
+            "- Roadmap `later`/`shaping`/`deferred` items are not requirements; no-gos are hard constraints."
+        ),
+        "block states that roadmap later/shaping/deferred items are not requirements and no-gos are hard constraints: {agents}"
+    );
+    assert!(
+        agents.contains(
+            "- Never edit `.podras/roadmap.toml`; admission, deferral and kill are human decisions."
+        ),
+        "block forbids agents from editing the roadmap state file: {agents}"
+    );
 }
 
 #[test]

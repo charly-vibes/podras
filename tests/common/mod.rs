@@ -10,6 +10,7 @@
 
 #![allow(dead_code)]
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -22,6 +23,24 @@ const FIXED_DATE: &str = "2026-11-01T00:00:00Z";
 /// A temporary git repository seeded for brief tests.
 pub struct TempRepo {
     dir: TempDir,
+}
+
+/// One beads row carrying the fields the roadmap lens reads.
+///
+/// The older `beads_jsonl` helper only knows `(id, title, status)`; the lens
+/// also matches no-go terms against labels and judges epic motion from
+/// `updated_at`, so roadmap fixtures seed rows through this explicit shape.
+pub struct BeadRow<'a> {
+    /// Issue identifier.
+    pub id: &'a str,
+    /// Issue title.
+    pub title: &'a str,
+    /// Tracker status (`open`, `in_progress`, `closed`, ...).
+    pub status: &'a str,
+    /// Labels attached to the issue.
+    pub labels: &'a [&'a str],
+    /// Last transition instant, RFC 3339.
+    pub updated_at: &'a str,
 }
 
 impl TempRepo {
@@ -182,6 +201,77 @@ impl TempRepo {
     /// Write an OpenSpec change at `openspec/changes/<name>/proposal.md`.
     pub fn spec_change(&self, name: &str, proposal: &str) {
         self.write(&format!("openspec/changes/{name}/proposal.md"), proposal);
+    }
+
+    /// Write `.podras/roadmap.toml` verbatim.
+    pub fn roadmap(&self, toml: &str) {
+        self.write(".podras/roadmap.toml", toml);
+    }
+
+    /// Write `.beads/issues.jsonl` from rows carrying labels and timestamps.
+    ///
+    /// No dependency edges: roadmap evidence is about epic state and motion,
+    /// not readiness, so these rows stay a flat tracker export.
+    pub fn beads_jsonl_rows(&self, rows: &[BeadRow<'_>]) {
+        let mut body = String::new();
+        for row in rows {
+            let issue = serde_json::json!({
+                "_type": "issue",
+                "id": row.id,
+                "title": row.title,
+                "description": "",
+                "status": row.status,
+                "priority": 1,
+                "issue_type": "task",
+                "owner": "podras@tests.invalid",
+                "created_at": row.updated_at,
+                "created_by": "Podras Tests",
+                "updated_at": row.updated_at,
+                "metadata": {},
+                "labels": row.labels,
+                "dependencies": [],
+                "comments": []
+            });
+            body.push_str(&serde_json::to_string(&issue).expect("serialize issue fixture"));
+            body.push('\n');
+        }
+        self.write(".beads/issues.jsonl", &body);
+    }
+
+    /// Snapshot every non-git file under the repository root as path -> bytes.
+    ///
+    /// `.git` is excluded because ordinary git reads rewrite index and ref
+    /// files, which would report churn no verb caused. Everything else is
+    /// included byte for byte, which is what makes read-only assertions exact:
+    /// a single rewritten byte in a curation or tracker file fails the compare.
+    pub fn tree_snapshot(&self) -> BTreeMap<String, Vec<u8>> {
+        fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Vec<u8>>) {
+            let mut entries: Vec<_> = fs::read_dir(dir)
+                .expect("read fixture directory")
+                .map(|entry| entry.expect("read fixture directory entry"))
+                .collect();
+            entries.sort_by_key(std::fs::DirEntry::file_name);
+            for entry in entries {
+                let path = entry.path();
+                if entry.file_name().to_string_lossy() == ".git" {
+                    continue;
+                }
+                if path.is_dir() {
+                    walk(root, &path, out);
+                } else {
+                    let relative = path
+                        .strip_prefix(root)
+                        .expect("snapshot path lives inside the repository")
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    out.insert(relative, fs::read(&path).expect("read fixture file bytes"));
+                }
+            }
+        }
+
+        let mut snapshot = BTreeMap::new();
+        walk(self.root(), self.root(), &mut snapshot);
+        snapshot
     }
 }
 
