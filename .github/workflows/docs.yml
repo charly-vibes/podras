@@ -1,0 +1,71 @@
+# Docs workflow — build and deploy mdBook to GitHub Pages
+#
+# Triggers on push to main when docs/ changes.
+# Uses the native GitHub Pages deployment approach.
+
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'book.toml'
+      - 'theme/**'
+      - 'Cargo.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install mdBook
+        uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: 'latest'
+
+      # §2: specs are deployed into the book at build time — the copies under
+      # docs/src/specs/ are build artifacts, never committed.
+      - name: Copy OpenSpec specs into docs source
+        run: |
+          mkdir -p docs/src/specs
+          for dir in openspec/specs/*/; do
+            name=$(basename "$dir")
+            cp "$dir/spec.md" "docs/src/specs/$name.md"
+          done
+
+      - name: Build docs
+        run: mdbook build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: book
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
