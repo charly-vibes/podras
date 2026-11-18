@@ -80,6 +80,13 @@ src/error.rs                thiserror enums + miette diagnostics
 src/commands.rs             CLI adapter: one entry point per subcommand; delegates to verbs
 src/model.rs                Brief, sources, work items, enums, ordering keys
 src/brief.rs                assemble model from readers + curation + health
+src/brief/tracker.rs        tracker items addressed by identifier
+src/brief/curation_view.rs  curated focus ordering and curation stamps
+src/brief/parking.rs        parked entries split into still-parked and expired
+src/brief/health.rs         human health verdict layer
+src/brief/sections.rs       computed sections and envelope assembly
+src/brief/ordering.rs       deterministic sort keys and render-bound truncation
+src/hash.rs                 semantic payload and source hash
 src/readers/mod.rs          Reader trait, SourceRead/SourceFailure, dispatch
 src/readers/beads.rs        .beads/issues.jsonl
 src/readers/git.rs          HEAD, log window, current branch

@@ -85,8 +85,7 @@ fn run(cli: Cli) -> miette::Result<()> {
     match cli.command {
         Command::Brief(args) => {
             let repo = repository()?;
-            podras::commands::brief(&repo, args.json, args.write, args.as_of)
-                .map_err(into_report)
+            podras::commands::brief(&repo, args.json, args.write, args.as_of).map_err(into_report)
         }
         Command::Focus { id } => {
             let repo = repository()?;

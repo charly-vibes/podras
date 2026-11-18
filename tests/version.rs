@@ -9,7 +9,6 @@
 //! binary, so it drives the TDD red stage before any command logic exists.
 
 use assert_cmd::Command;
-use predicates::prelude::*;
 
 fn podras() -> Command {
     Command::cargo_bin("podras").expect("podras binary is built for tests")
@@ -17,11 +16,18 @@ fn podras() -> Command {
 
 #[test]
 fn plain_version_prints_name_and_version() {
-    podras()
+    let stdout = podras()
         .arg("--version")
         .assert()
         .success()
-        .stdout(predicate::str::contains("podras 0.1.0"));
+        .get_output()
+        .stdout
+        .clone();
+    let stdout = String::from_utf8(stdout).expect("version output is UTF-8");
+    assert!(
+        stdout.contains("podras 0.1.0"),
+        "version output is missing the name and version: {stdout}"
+    );
 }
 
 #[test]

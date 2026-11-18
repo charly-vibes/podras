@@ -70,10 +70,7 @@ impl TempRepo {
             .output()
             .expect("run git in fixture repository");
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            output.status.success(),
-            "git {args:?} failed: {stderr}"
-        );
+        assert!(output.status.success(), "git {args:?} failed: {stderr}");
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 

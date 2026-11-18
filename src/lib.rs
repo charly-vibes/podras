@@ -13,6 +13,7 @@ pub mod curation;
 pub mod error;
 pub mod freshness;
 pub mod harvest;
+pub mod hash;
 pub mod health;
 pub mod model;
 pub mod readers;

@@ -3,8 +3,8 @@
 //! Responsibilities:
 //! - declare every enum and struct that crosses the brief --json boundary;
 //! - derive serde and JSON Schema so the model is the single schema source;
-//! - provide the semantic payload and source hash used to compare briefs
-//!   ignoring volatile time.
+//! - re-export the semantic payload and source hash used to compare briefs
+//!   ignoring volatile time; hashing itself lives in `hash`.
 //!
 //! Rationale: the envelope is a contract, not prose. Keeping every field typed
 //! and shared by readers, health, rendering, and tests prevents parallel
@@ -17,7 +17,6 @@ use std::str::FromStr;
 use chrono::{DateTime, NaiveDate, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use sha2::{Digest, Sha256};
 
 /// Schema identifier carried by every brief payload.
 pub const SCHEMA_VERSION: &str = "brief.v1";
@@ -383,38 +382,4 @@ pub struct Brief {
     pub warnings: Vec<Warning>,
 }
 
-/// Serialize a brief with volatile and self-referential fields removed.
-///
-/// Two runs over identical inputs differ only in `generated_at`; `source_hash`
-/// is a hash of this very payload, so it cannot participate in its own input.
-/// The result is the semantic payload compared byte-for-byte by determinism
-/// tests and hashed by [`source_hash`].
-pub fn semantic_payload(brief: &Brief) -> serde_json::Value {
-    let mut payload = serde_json::to_value(brief).expect("Brief is always JSON-serializable");
-    if let Some(object) = payload.as_object_mut() {
-        object.remove("generated_at");
-        object.remove("source_hash");
-    }
-    payload
-}
-
-/// SHA-256 over the canonical JSON of the semantic payload.
-///
-/// Canonical JSON means sorted object keys (serde_json's default map ordering)
-/// and no insignificant whitespace. `generated_at` and `source_hash` are
-/// omitted, so re-rendering identical inputs yields identical hashes. When
-/// `repo_head` is supplied it participates as `head_sha`, which lets a caller
-/// hash a payload whose envelope has not been stamped with HEAD yet.
-pub fn source_hash(brief: &Brief, repo_head: Option<&str>) -> String {
-    let mut payload = semantic_payload(brief);
-    if let (Some(head), Some(object)) = (repo_head, payload.as_object_mut()) {
-        object.insert(
-            "head_sha".to_string(),
-            serde_json::Value::String(head.to_string()),
-        );
-    }
-    let canonical = serde_json::to_string(&payload).expect("semantic payload is serializable");
-    let mut hasher = Sha256::new();
-    hasher.update(canonical.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+pub use crate::hash::{semantic_payload, source_hash};

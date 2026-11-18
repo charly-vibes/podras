@@ -11,16 +11,19 @@
 
 use std::path::Path;
 
+use chrono::{DateTime, NaiveDate, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+use crate::model::{Resurface, ResurfaceParseError};
 
 /// Repository-relative curation path.
 pub const CURATION_REL_PATH: &str = ".podras/curation.toml";
 
 /// One focused item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct FocusEntry {
     /// Focused item identifier.
     pub id: String,
@@ -37,6 +40,7 @@ pub struct FocusEntry {
 
 /// One parked item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ParkEntry {
     /// Parked item identifier.
     pub id: String,
@@ -54,6 +58,7 @@ pub struct ParkEntry {
 
 /// Human health verdict stored in curation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CurationHealth {
     /// Verdict: `green`, `amber`, or `red`.
     pub status: String,
@@ -70,7 +75,7 @@ pub struct CurationHealth {
 
 /// Parsed `.podras/curation.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct CurationFile {
     /// One-line project purpose.
     pub purpose_lite: Option<String>,
@@ -86,12 +91,117 @@ pub struct CurationFile {
     pub parked: Vec<ParkEntry>,
 }
 
+/// Parse a human date field, accepting `YYYY-MM-DD` or an RFC 3339 timestamp.
+///
+/// The model keeps these fields as strings because humans hand-edit the file;
+/// this is the one place that decides what counts as a usable date.
+pub fn parse_human_date(raw: &str) -> Option<NaiveDate> {
+    let raw = raw.trim();
+    if let Ok(date) = NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
+        return Some(date);
+    }
+    DateTime::parse_from_rfc3339(raw)
+        .ok()
+        .map(|timestamp| timestamp.date_naive())
+}
+
+impl FocusEntry {
+    /// `focused_since` as a date, when present and parseable.
+    pub fn focused_since(&self) -> Option<NaiveDate> {
+        self.focused_since.as_deref().and_then(parse_human_date)
+    }
+
+    /// `confirmed_at` as a date, when present and parseable.
+    pub fn confirmed_at(&self) -> Option<NaiveDate> {
+        self.confirmed_at.as_deref().and_then(parse_human_date)
+    }
+}
+
+impl ParkEntry {
+    /// `parked_at` as a date, when present and parseable.
+    pub fn parked_at(&self) -> Option<NaiveDate> {
+        self.parked_at.as_deref().and_then(parse_human_date)
+    }
+
+    /// `confirmed_at` as a date, when present and parseable.
+    pub fn confirmed_at(&self) -> Option<NaiveDate> {
+        self.confirmed_at.as_deref().and_then(parse_human_date)
+    }
+
+    /// Parse the mandatory resurface trigger (`YYYY-MM-DD` or `event:<name>`).
+    pub fn resurface(&self) -> Result<Resurface, ResurfaceParseError> {
+        self.resurface.parse()
+    }
+}
+
+impl CurationHealth {
+    /// `confirmed_at` as a date, when present and parseable.
+    pub fn confirmed_at(&self) -> Option<NaiveDate> {
+        self.confirmed_at.as_deref().and_then(parse_human_date)
+    }
+}
+
 /// Load curation from the repository, returning `None` when absent.
-pub fn load(_repo: &Path) -> Result<Option<CurationFile>> {
-    Err(Error::NotYetImplemented("curation::load"))
+///
+/// A malformed file is a domain error carrying `curation_parse_error`; the
+/// curation reader turns that into an `unreadable` source warning, so callers
+/// degrade instead of aborting the brief. Unknown keys are rejected at the top
+/// level and inside `[health]`, `[[focus]]`, and `[[parked]]` entries.
+pub fn load(repo: &Path) -> Result<Option<CurationFile>> {
+    let path = repo.join(CURATION_REL_PATH);
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(Error::Io(error)),
+    };
+    toml::from_str(&raw)
+        .map(Some)
+        .map_err(|error| Error::Domain {
+            code: "curation_parse_error",
+            message: format!("{CURATION_REL_PATH}: {error}"),
+            suggestion: Some(
+                "fix the TOML or run `podras init` to scaffold a valid curation file".to_string(),
+            ),
+        })
 }
 
 /// Persist curation to the repository, creating `.podras/` as needed.
-pub fn save(_repo: &Path, _curation: &CurationFile) -> Result<()> {
-    Err(Error::NotYetImplemented("curation::save"))
+///
+/// The bytes go to a temporary file in the same directory and are renamed over
+/// `curation.toml`, so a reader never observes a half-written file and a failed
+/// write leaves the previous file intact.
+pub fn save(repo: &Path, curation: &CurationFile) -> Result<()> {
+    std::fs::create_dir_all(repo.join(".podras"))?;
+    let path = repo.join(CURATION_REL_PATH);
+    let body = toml::to_string_pretty(curation).map_err(|error| Error::Domain {
+        code: "curation_serialize_error",
+        message: format!("cannot serialize {CURATION_REL_PATH}: {error}"),
+        suggestion: None,
+    })?;
+    let temp = repo
+        .join(".podras")
+        .join(format!(".curation.toml.{}.tmp", std::process::id()));
+    std::fs::write(&temp, body)?;
+    if let Err(error) = std::fs::rename(&temp, &path) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(Error::Io(error));
+    }
+    Ok(())
+}
+
+/// File mtime of the last curation write, in UTC.
+pub fn updated_at(repo: &Path) -> Option<DateTime<Utc>> {
+    let modified = std::fs::metadata(repo.join(CURATION_REL_PATH))
+        .ok()?
+        .modified()
+        .ok()?;
+    Some(DateTime::<Utc>::from(modified))
+}
+
+/// Newest human `confirmed_at` across health and focus/parked entries.
+pub fn confirmed_at(file: &CurationFile) -> Option<NaiveDate> {
+    let health = file.health.as_ref().and_then(CurationHealth::confirmed_at);
+    let focus = file.focus.iter().filter_map(FocusEntry::confirmed_at);
+    let parked = file.parked.iter().filter_map(ParkEntry::confirmed_at);
+    health.into_iter().chain(focus).chain(parked).max()
 }

@@ -7,7 +7,7 @@
 //! Rationale: both renders must derive from the same brief value so the
 //! narrative and agent envelope never diverge in content.
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::model::Brief;
 
 pub mod envelope;
@@ -23,6 +23,9 @@ pub enum RenderFormat {
 }
 
 /// Render a brief in the requested format.
-pub fn render(_brief: &Brief, _format: RenderFormat) -> Result<String> {
-    Err(Error::NotYetImplemented("render::render"))
+pub fn render(brief: &Brief, format: RenderFormat) -> Result<String> {
+    match format {
+        RenderFormat::Markdown => markdown::render(brief, None),
+        RenderFormat::Json => envelope::to_json(brief),
+    }
 }

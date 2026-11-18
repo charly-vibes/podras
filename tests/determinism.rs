@@ -15,8 +15,8 @@ use podras::brief::{
 };
 use podras::curation::{CurationFile, CurationHealth, FocusEntry, ParkEntry};
 use podras::model::{
-    HealthBasis, HealthStatus, RecentEvent, SourceName, SourceState, SourceStatus, Staleness,
-    Warning, WorkItem, semantic_payload, source_hash,
+    HealthBasis, HealthStatus, RecentEvent, SignalKind, SourceName, SourceState, SourceStatus,
+    Staleness, Warning, WorkItem, semantic_payload, source_hash,
 };
 
 fn day(raw: &str) -> NaiveDate {
@@ -61,7 +61,7 @@ fn commit(sha: &str, hour: u32) -> RecentEvent {
     }
 }
 
-fn inputs(generated_at: DateTime<Utc>) -> BriefInputs {
+fn beads() -> BeadsSummary {
     let mut blocked = item("podras-blocked", Some(1));
     blocked.blocked_by = vec!["podras-a".to_string()];
 
@@ -82,6 +82,15 @@ fn inputs(generated_at: DateTime<Utc>) -> BriefInputs {
         item("podras-ready-none", None),
     ];
 
+    BeadsSummary {
+        open,
+        blocked: vec![blocked],
+        ready,
+        observed_at: Some(instant(9)),
+    }
+}
+
+fn git() -> GitSummary {
     let recent = vec![
         commit("b2", 10),
         commit("a1", 10),
@@ -91,8 +100,31 @@ fn inputs(generated_at: DateTime<Utc>) -> BriefInputs {
         commit("f1", 7),
         commit("a0", 6),
     ];
+    GitSummary {
+        head_sha: Some("head123".to_string()),
+        recent,
+        observed_at: Some(instant(9)),
+    }
+}
 
-    let curation = CurationFile {
+fn specs() -> SpecSummary {
+    SpecSummary {
+        changes: Vec::new(),
+        stale_count: 0,
+        observed_at: Some(instant(9)),
+    }
+}
+
+fn whisper() -> WhisperReading {
+    WhisperReading {
+        observed_at: Some(instant(9)),
+        next_action: Some("pick up podras-a".to_string()),
+        content_hash: None,
+    }
+}
+
+fn curation() -> CurationFile {
+    CurationFile {
         purpose_lite: Some("podras: status read path for a cold return".to_string()),
         max_focus: Some(1),
         publish_whisper: Some(false),
@@ -139,58 +171,51 @@ fn inputs(generated_at: DateTime<Utc>) -> BriefInputs {
                 confirmed_at: Some("2026-11-02".to_string()),
             },
         ],
-    };
+    }
+}
 
+fn sources() -> Vec<SourceStatus> {
+    vec![
+        source(SourceName::Curation, SourceState::Present),
+        source(SourceName::Whisper, SourceState::Missing),
+        source(SourceName::Beads, SourceState::Present),
+        source(SourceName::Openspec, SourceState::Missing),
+        source(SourceName::Git, SourceState::Present),
+    ]
+}
+
+fn warnings() -> Vec<Warning> {
+    vec![
+        Warning {
+            source: SourceName::Git,
+            code: "git_unreadable".to_string(),
+            detail: "no HEAD".to_string(),
+        },
+        Warning {
+            source: SourceName::Beads,
+            code: "beads_parse_error".to_string(),
+            detail: "line z".to_string(),
+        },
+        Warning {
+            source: SourceName::Beads,
+            code: "beads_parse_error".to_string(),
+            detail: "line a".to_string(),
+        },
+    ]
+}
+
+fn inputs(generated_at: DateTime<Utc>) -> BriefInputs {
     BriefInputs {
-        beads: Some(BeadsSummary {
-            open,
-            blocked: vec![blocked],
-            ready,
-            observed_at: Some(instant(9)),
-        }),
-        git: Some(GitSummary {
-            head_sha: Some("head123".to_string()),
-            recent,
-            observed_at: Some(instant(9)),
-        }),
-        specs: Some(SpecSummary {
-            changes: Vec::new(),
-            stale_count: 0,
-            observed_at: Some(instant(9)),
-        }),
-        whisper: Some(WhisperReading {
-            observed_at: Some(instant(9)),
-            next_action: Some("pick up podras-a".to_string()),
-            content_hash: None,
-        }),
+        beads: Some(beads()),
+        git: Some(git()),
+        specs: Some(specs()),
+        whisper: Some(whisper()),
         curation: Some(CurationState {
-            curation,
+            curation: curation(),
             updated_at: Some(instant(8)),
         }),
-        sources: vec![
-            source(SourceName::Curation, SourceState::Present),
-            source(SourceName::Whisper, SourceState::Missing),
-            source(SourceName::Beads, SourceState::Present),
-            source(SourceName::Openspec, SourceState::Missing),
-            source(SourceName::Git, SourceState::Present),
-        ],
-        warnings: vec![
-            Warning {
-                source: SourceName::Git,
-                code: "git_unreadable".to_string(),
-                detail: "no HEAD".to_string(),
-            },
-            Warning {
-                source: SourceName::Beads,
-                code: "beads_parse_error".to_string(),
-                detail: "line z".to_string(),
-            },
-            Warning {
-                source: SourceName::Beads,
-                code: "beads_parse_error".to_string(),
-                detail: "line a".to_string(),
-            },
-        ],
+        sources: sources(),
+        warnings: warnings(),
         as_of: Some(day("2026-11-18")),
         now: day("2026-11-01"),
         generated_at,
@@ -201,22 +226,15 @@ fn ids(items: &[WorkItem]) -> Vec<&str> {
     items.iter().map(|item| item.id.as_str()).collect()
 }
 
-#[test]
-fn determinism_payload() {
-    let first = assemble(&inputs(instant(1)));
-    let second = assemble(&inputs(instant(2)));
-
-    assert_eq!(first.generated_at, instant(1));
-    assert_ne!(first.generated_at, second.generated_at);
-
-    let payload_a = semantic_payload(&first);
-    let payload_b = semantic_payload(&second);
+fn assert_payload_ignores_volatile(first: &podras::model::Brief, second: &podras::model::Brief) {
+    let payload_a = semantic_payload(first);
+    let payload_b = semantic_payload(second);
     assert_eq!(payload_a, payload_b, "semantic payloads must match");
     assert!(payload_a.get("generated_at").is_none());
     assert!(payload_a.get("source_hash").is_none());
     assert_eq!(
-        source_hash(&first, None),
-        source_hash(&second, None),
+        source_hash(first, None),
+        source_hash(second, None),
         "source hash must ignore generated_at"
     );
 
@@ -232,7 +250,9 @@ fn determinism_payload() {
         payload_a["parked"][0]["resurface"],
         serde_json::json!("event:value-prop-roadmap")
     );
+}
 
+fn assert_section_order(first: &podras::model::Brief) {
     assert_eq!(
         ids(&first.in_flight),
         ["podras-c", "podras-b", "podras-d", "podras-a"]
@@ -254,7 +274,9 @@ fn determinism_payload() {
         ids(&first.needs_retriage),
         ["podras-parked-old", "podras-parked-date"]
     );
+}
 
+fn assert_focus_and_truncation(first: &podras::model::Brief) {
     assert_eq!(first.focus.len(), 1);
     assert_eq!(first.focus[0].id, "podras-second");
     assert_eq!(first.focus[0].confirmed_at, Some(day("2026-11-10")));
@@ -262,7 +284,9 @@ fn determinism_payload() {
     assert_eq!(first.truncation.omitted_counts.get("focus"), Some(&1));
     assert_eq!(first.truncation.omitted_counts.get("recent"), Some(&2));
     assert!(!first.truncation.omitted_counts.contains_key("blocked"));
+}
 
+fn assert_evidence(first: &podras::model::Brief) {
     assert_eq!(
         first.sources.iter().map(|row| row.name).collect::<Vec<_>>(),
         [
@@ -286,9 +310,34 @@ fn determinism_payload() {
         ]
     );
 
-    assert_eq!(first.health.status, HealthStatus::Green);
+    let health_kinds: Vec<SignalKind> = first
+        .health
+        .signals
+        .iter()
+        .map(|signal| signal.kind)
+        .collect();
+    assert_eq!(first.health.status, HealthStatus::Amber);
     assert_eq!(first.health.basis, HealthBasis::Human);
+    assert!(health_kinds.contains(&SignalKind::WipOverCap));
+    assert!(health_kinds.contains(&SignalKind::FocusClosed));
+    let health_reason = first.health.reason.as_deref().unwrap_or_default();
+    assert!(health_reason.contains("wip_over_cap"));
+    assert!(health_reason.contains("focus_closed"));
     assert_eq!(first.health.owner.as_deref(), Some("@sasha"));
     assert_eq!(first.head_sha.as_deref(), Some("head123"));
     assert!(first.source_hash.is_some());
+}
+
+#[test]
+fn determinism_payload() {
+    let first = assemble(&inputs(instant(1)));
+    let second = assemble(&inputs(instant(2)));
+
+    assert_eq!(first.generated_at, instant(1));
+    assert_ne!(first.generated_at, second.generated_at);
+
+    assert_payload_ignores_volatile(&first, &second);
+    assert_section_order(&first);
+    assert_focus_and_truncation(&first);
+    assert_evidence(&first);
 }

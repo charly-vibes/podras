@@ -1,0 +1,577 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Brief",
+  "description": "The complete typed brief envelope.",
+  "type": "object",
+  "properties": {
+    "blocked": {
+      "description": "Blocked or waiting items.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WorkItem"
+      }
+    },
+    "curation": {
+      "description": "Curation timestamps.",
+      "$ref": "#/$defs/CurationStamp"
+    },
+    "focus": {
+      "description": "Curated focus.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WorkItem"
+      }
+    },
+    "generated_at": {
+      "description": "Generation timestamp; the only volatile field.",
+      "type": "string"
+    },
+    "head_sha": {
+      "description": "Repository HEAD sha, when known.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "health": {
+      "description": "Layered health verdict.",
+      "$ref": "#/$defs/Health"
+    },
+    "in_flight": {
+      "description": "Work currently in flight.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WorkItem"
+      }
+    },
+    "needs_retriage": {
+      "description": "Parked items whose date trigger has passed.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WorkItem"
+      }
+    },
+    "next": {
+      "description": "Ready candidates, excluding focus and parked items.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WorkItem"
+      }
+    },
+    "parked": {
+      "description": "Currently parked items.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ParkedItem"
+      }
+    },
+    "purpose_lite": {
+      "description": "One-line project purpose.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "recent": {
+      "description": "Recent commit events, newest first.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RecentEvent"
+      }
+    },
+    "schema_version": {
+      "description": "Envelope schema identifier.",
+      "type": "string"
+    },
+    "source_hash": {
+      "description": "SHA-256 of the canonical semantic payload.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sources": {
+      "description": "Declared source rows in fixed declaration order.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SourceStatus"
+      }
+    },
+    "truncation": {
+      "description": "Declared truncation of bounded sections.",
+      "$ref": "#/$defs/Truncation"
+    },
+    "warnings": {
+      "description": "Stable per-source warnings; never truncated.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Warning"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "generated_at",
+    "sources",
+    "curation",
+    "focus",
+    "in_flight",
+    "blocked",
+    "next",
+    "parked",
+    "needs_retriage",
+    "recent",
+    "health",
+    "truncation",
+    "warnings"
+  ],
+  "$defs": {
+    "CurationStamp": {
+      "description": "Curation timestamps exposed by the brief.\n\n`updated_at` is the file mtime of the last verb write; `confirmed_at` is the\nnewest human `confirmed_at` among health and focus/parked entries. Keeping\nthem separate is what makes \"unchanged\" differ from \"unconfirmed\".",
+      "type": "object",
+      "properties": {
+        "confirmed_at": {
+          "description": "When a human last confirmed curation state.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "updated_at": {
+          "description": "When the curation file last changed.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Health": {
+      "description": "Layered health verdict plus its evidence.",
+      "type": "object",
+      "properties": {
+        "basis": {
+          "description": "Which layer decided the verdict.",
+          "$ref": "#/$defs/HealthBasis"
+        },
+        "owner": {
+          "description": "Human owner of the verdict, when declared.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "description": "Optional human explanation.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signals": {
+          "description": "Signals that fired while computing the verdict.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Signal"
+          }
+        },
+        "status": {
+          "description": "Final verdict.",
+          "$ref": "#/$defs/HealthStatus"
+        }
+      },
+      "required": [
+        "status",
+        "basis",
+        "signals"
+      ]
+    },
+    "HealthBasis": {
+      "description": "What the health verdict is based on.",
+      "oneOf": [
+        {
+          "description": "Fresh human verdict from curation.",
+          "type": "string",
+          "const": "human"
+        },
+        {
+          "description": "Computed signals.",
+          "type": "string",
+          "const": "signals"
+        },
+        {
+          "description": "Neither: verdict unknown.",
+          "type": "string",
+          "const": "none"
+        }
+      ]
+    },
+    "HealthStatus": {
+      "description": "Health verdict values.",
+      "oneOf": [
+        {
+          "description": "A fresh human verdict with no firing signal.",
+          "type": "string",
+          "const": "green"
+        },
+        {
+          "description": "At least one signal fires, or a human marked the project amber.",
+          "type": "string",
+          "const": "amber"
+        },
+        {
+          "description": "A human marked the project red.",
+          "type": "string",
+          "const": "red"
+        },
+        {
+          "description": "No human verdict and no decisive signal; silence is not green.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    },
+    "ParkedItem": {
+      "description": "A parked item, owned exclusively by curation state.",
+      "type": "object",
+      "properties": {
+        "confirmed_at": {
+          "description": "When a human last confirmed the park.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Parked item identifier.",
+          "type": "string"
+        },
+        "parked_at": {
+          "description": "When it was parked.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why it is parked.",
+          "type": "string"
+        },
+        "resurface": {
+          "description": "Mandatory date-or-event resurface trigger.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "reason",
+        "parked_at",
+        "confirmed_at",
+        "resurface"
+      ]
+    },
+    "RecentEvent": {
+      "description": "A recent git change.",
+      "type": "object",
+      "properties": {
+        "committed_at": {
+          "description": "Commit timestamp.",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "Outcome the commit delivered, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha": {
+          "description": "Commit sha.",
+          "type": "string"
+        },
+        "subject": {
+          "description": "One-line commit subject.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha",
+        "committed_at",
+        "subject"
+      ]
+    },
+    "Signal": {
+      "description": "A firing health signal with a human-readable reason.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "Which signal fired.",
+          "$ref": "#/$defs/SignalKind"
+        },
+        "reason": {
+          "description": "Why it fired.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "reason"
+      ]
+    },
+    "SignalKind": {
+      "description": "Named health signals; each firing signal carries its own reason.",
+      "oneOf": [
+        {
+          "description": "The curated focus has not been confirmed recently.",
+          "type": "string",
+          "const": "stale_focus"
+        },
+        {
+          "description": "More focused items than `max_focus`.",
+          "type": "string",
+          "const": "wip_over_cap"
+        },
+        {
+          "description": "No meaningful project progress for too long.",
+          "type": "string",
+          "const": "stuck_project"
+        },
+        {
+          "description": "The curated focus item is closed in the tracker.",
+          "type": "string",
+          "const": "focus_closed"
+        },
+        {
+          "description": "A parked item passed its resurface trigger.",
+          "type": "string",
+          "const": "parked_expired"
+        },
+        {
+          "description": "Commits exist that no issue claims.",
+          "type": "string",
+          "const": "orphan_commits"
+        },
+        {
+          "description": "Spec changes changed without a linked bead.",
+          "type": "string",
+          "const": "spec_change_without_bead"
+        }
+      ]
+    },
+    "SourceName": {
+      "description": "Declared data source for a brief reading.",
+      "oneOf": [
+        {
+          "description": "Beads issue tracker export.",
+          "type": "string",
+          "const": "beads"
+        },
+        {
+          "description": "Git history and working tree.",
+          "type": "string",
+          "const": "git"
+        },
+        {
+          "description": "OpenSpec change store.",
+          "type": "string",
+          "const": "openspec"
+        },
+        {
+          "description": "Whisper session notes.",
+          "type": "string",
+          "const": "whisper"
+        },
+        {
+          "description": "Human-curated `.podras/curation.toml`.",
+          "type": "string",
+          "const": "curation"
+        }
+      ]
+    },
+    "SourceState": {
+      "description": "Whether a declared source could be read at all.",
+      "oneOf": [
+        {
+          "description": "The source exists and was read.",
+          "type": "string",
+          "const": "present"
+        },
+        {
+          "description": "The source does not exist for this repository.",
+          "type": "string",
+          "const": "missing"
+        },
+        {
+          "description": "The source exists but could not be read or parsed.",
+          "type": "string",
+          "const": "unreadable"
+        }
+      ]
+    },
+    "SourceStatus": {
+      "description": "One source row in the brief envelope.",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "Optional per-source detail or warning text.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Declared source name.",
+          "$ref": "#/$defs/SourceName"
+        },
+        "observed_at": {
+          "description": "Timestamp the source data was observed at, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "staleness": {
+          "description": "Per-source staleness verdict; never project-wide.",
+          "$ref": "#/$defs/Staleness"
+        },
+        "status": {
+          "description": "Present / missing / unreadable.",
+          "$ref": "#/$defs/SourceState"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "staleness"
+      ]
+    },
+    "Staleness": {
+      "description": "Per-source freshness judgement.",
+      "oneOf": [
+        {
+          "description": "Observed recently enough for this source.",
+          "type": "string",
+          "const": "fresh"
+        },
+        {
+          "description": "Observed, but past this source's freshness horizon.",
+          "type": "string",
+          "const": "stale"
+        },
+        {
+          "description": "No usable timestamp; freshness cannot be judged.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    },
+    "Truncation": {
+      "description": "Declared truncation of bounded sections.",
+      "type": "object",
+      "properties": {
+        "applied": {
+          "description": "True when any bound removed at least one item.",
+          "type": "boolean"
+        },
+        "omitted_counts": {
+          "description": "Per-section count of removed items; only sections that dropped items.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        }
+      },
+      "required": [
+        "applied",
+        "omitted_counts"
+      ]
+    },
+    "Warning": {
+      "description": "A stable per-source warning; warnings are never truncated.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Stable machine-readable code.",
+          "type": "string"
+        },
+        "detail": {
+          "description": "Human-readable detail.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Source that produced the warning.",
+          "$ref": "#/$defs/SourceName"
+        }
+      },
+      "required": [
+        "source",
+        "code",
+        "detail"
+      ]
+    },
+    "WorkItem": {
+      "description": "A unit of work read from a source or curated as intent.",
+      "type": "object",
+      "properties": {
+        "age_days": {
+          "description": "Days since the item was created, when the source reports it.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "blocked_by": {
+          "description": "Identifiers blocking this item.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confirmed_at": {
+          "description": "Human confirmation date when the item is curated.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Stable item identifier.",
+          "type": "string"
+        },
+        "priority": {
+          "description": "Tracker priority, lower is more urgent; absent sorts last.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "reason": {
+          "description": "Curation reason when the item is curated.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "description": "Tracker status as reported, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "description": "Human-readable title, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "blocked_by"
+      ]
+    }
+  }
+}
