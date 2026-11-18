@@ -64,6 +64,9 @@ impl TempRepo {
             .current_dir(self.root())
             .env("GIT_AUTHOR_DATE", FIXED_DATE)
             .env("GIT_COMMITTER_DATE", FIXED_DATE)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_TERMINAL_PROMPT", "0")
             .output()
             .expect("run git in fixture repository");
         let stderr = String::from_utf8_lossy(&output.stderr);

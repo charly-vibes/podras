@@ -50,9 +50,9 @@ struct BriefArgs {
     /// Write BRIEF.md and BRIEF.json.
     #[arg(long)]
     write: bool,
-    /// Pin the observation instant (RFC 3339).
-    #[arg(long)]
-    as_of: Option<String>,
+    /// Pin the observation instant (YYYY-MM-DD).
+    #[arg(long, value_parser = clap::value_parser!(chrono::NaiveDate))]
+    as_of: Option<chrono::NaiveDate>,
 }
 
 #[derive(Debug, Args)]
@@ -85,7 +85,7 @@ fn run(cli: Cli) -> miette::Result<()> {
     match cli.command {
         Command::Brief(args) => {
             let repo = repository()?;
-            podras::commands::brief(&repo, args.json, args.write, args.as_of.as_deref())
+            podras::commands::brief(&repo, args.json, args.write, args.as_of)
                 .map_err(into_report)
         }
         Command::Focus { id } => {

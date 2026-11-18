@@ -77,6 +77,7 @@ Cargo.toml
 src/main.rs                 clap entrypoint; maps errors to exit codes
 src/lib.rs                  public modules; brief orchestration entry
 src/error.rs                thiserror enums + miette diagnostics
+src/commands.rs             CLI adapter: one entry point per subcommand; delegates to verbs
 src/model.rs                Brief, sources, work items, enums, ordering keys
 src/brief.rs                assemble model from readers + curation + health
 src/readers/mod.rs          Reader trait, SourceRead/SourceFailure, dispatch
@@ -113,10 +114,13 @@ any v1 code path. `src/freshness.rs` is v1 code: it owns the staleness mapping.
 - `schemars = "1"` (JSON Schema 2020-12 output)
 - `miette = "7"`, `thiserror = "2"`
 - `chrono = { version = "0.4", features = ["serde"] }`
-- dev: `tempfile = "3"`
+- `sha2 = "0.10"` for the canonical `source_hash` required by D5.
+- dev: `tempfile = "3"`, `assert_cmd = "2"`, `predicates = "3"`,
+  `jsonschema = "0.61"` (D14 envelope validation).
 
-Integration tests invoke the binary through `env!("CARGO_BIN_EXE_podras")` with
-`std::process::Command`; no extra assertion crate is required.
+`src/commands.rs` is the CLI adapter layer: `src/main.rs` parses arguments and
+calls it, and it delegates mutations to `verbs/*`. It owns no policy of its
+own.
 
 ### D4. Model
 
@@ -237,7 +241,9 @@ never to write it. Writes are atomic (temp file + rename) and serialize the
 curation model with `toml` (verb writes normalize formatting and drop comments;
 the commented template is only the initial scaffold written by `init`). Unknown
 keys are rejected on load (`deny_unknown_fields`) and reported as a
-per-source `unreadable` warning with defaults, never a hard failure.
+per-source `unreadable` warning with defaults, never a hard failure. Absent
+optional fields resolve through accessors: `max_focus` defaults to 1 and
+`publish_whisper` to false; `purpose_lite` is a `String` once a file exists.
 
 ```toml
 purpose_lite = "podras: status read path for a cold return"

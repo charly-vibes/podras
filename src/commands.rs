@@ -10,27 +10,29 @@
 
 use std::path::Path;
 
+use chrono::NaiveDate;
+
 use crate::error::{Error, Result};
 use crate::model::Brief;
 
 /// Render the brief for the repository.
-pub fn brief(_repo: &Path, _json: bool, _write: bool, _as_of: Option<&str>) -> Result<()> {
+pub fn brief(_repo: &Path, _json: bool, _write: bool, _as_of: Option<NaiveDate>) -> Result<()> {
     Err(Error::NotYetImplemented("commands::brief"))
 }
 
 /// Select the curated focus item for the repository.
-pub fn focus(_repo: &Path, _id: &str) -> Result<()> {
-    Err(Error::NotYetImplemented("commands::focus"))
+pub fn focus(repo: &Path, id: &str) -> Result<()> {
+    crate::verbs::focus::run(repo, id)
 }
 
 /// Park an item until its resurface trigger.
-pub fn park(_repo: &Path, _id: &str, _reason: &str, _resurface: &str) -> Result<()> {
-    Err(Error::NotYetImplemented("commands::park"))
+pub fn park(repo: &Path, id: &str, reason: &str, resurface: &str) -> Result<()> {
+    crate::verbs::park::run(repo, id, reason, resurface)
 }
 
 /// Initialize podras state for the repository.
-pub fn init(_repo: &Path) -> Result<()> {
-    Err(Error::NotYetImplemented("commands::init"))
+pub fn init(repo: &Path) -> Result<()> {
+    crate::verbs::init::run(repo)
 }
 
 /// Emit the brief JSON Schema (2020-12) to stdout.

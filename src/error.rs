@@ -45,4 +45,14 @@ pub enum Error {
 /// Result alias used throughout the crate.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-impl miette::Diagnostic for Error {}
+impl miette::Diagnostic for Error {
+    fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        match self {
+            Error::Domain {
+                suggestion: Some(suggestion),
+                ..
+            } => Some(Box::new(suggestion)),
+            _ => None,
+        }
+    }
+}
