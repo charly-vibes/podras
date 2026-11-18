@@ -77,13 +77,14 @@ pub fn write_renders_to(
 
 /// Write `ROADMAP.md` and `ROADMAP.json` into an existing `dir`.
 ///
-/// The roadmap narrative carries no whisper content, so `repo` is not a
-/// privacy authority here; it stays in the signature for symmetry with the
-/// brief writer. The directory is never created, and staging plus rename
-/// semantics are the pair writer's, so a failed write leaves both targets
-/// untouched. A missing or non-directory target is a hard error.
-pub fn write_roadmap_renders_to(repo: &Path, dir: &Path, brief: &Brief) -> Result<()> {
-    let _ = repo;
+/// `ROADMAP.md` is the lens narrative only; `ROADMAP.json` is the full brief
+/// envelope with the `roadmap` object attached, so an agent reading the file
+/// also sees sources, health, and truncation. The roadmap narrative carries no
+/// whisper content, so no curation authority is consulted here. The directory
+/// is never created, and staging plus rename semantics are the pair writer's,
+/// so a failed write leaves both targets untouched. A missing or non-directory
+/// target is a hard error.
+pub fn write_roadmap_renders_to(dir: &Path, brief: &Brief) -> Result<()> {
     if !dir.is_dir() {
         return Err(Error::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,

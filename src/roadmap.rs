@@ -4,21 +4,22 @@
 //! - turn a validated `.podras/roadmap.toml` plus tracker records into the
 //!   typed, bounded, deterministically ordered `RoadmapView`;
 //! - attach that view to a brief and re-stamp the source hash;
-//! - expose the file loader and its schema types to the CLI boundary.
+//! - expose the file loader and the roadmap state path to the CLI boundary.
 //!
 //! Rationale: the roadmap is a separate lens (decision 16), never mixed into
 //! focus/parked. `assemble` is a pure function of the validated file, the bead
 //! records, and the pinned evaluation date — no clock, no filesystem, no
 //! environment — because identical inputs under `--as-of` must produce
-//! identical output. Bounds apply after sorting, and warnings are computed
-//! before truncation so a dropped bet still reports its advisory.
+//! identical output. Bounds apply after sorting; `review_due` and the warnings
+//! are computed over the retained lists, so a warning never names a bet the
+//! lens does not show. `roadmap.truncation` covers bets and no-gos only: parked
+//! omissions stay in the brief's own `truncation`.
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use chrono::NaiveDate;
 
-use crate::brief::BriefInputs;
 use crate::curation::parse_human_date;
 use crate::model::{
     BetStatus, BetView, Brief, NoGoView, ROADMAP_BETS_BOUND, ROADMAP_NO_GOS_BOUND, RoadmapView,
@@ -29,9 +30,9 @@ use crate::readers::beads::IssueRecord;
 pub mod file;
 mod warnings;
 
-pub use file::{
-    BetEntry, IdentityEntry, NoGoEntry, ROADMAP_REL_PATH, RoadmapFile, load, validate, violations,
-};
+use file::{BetEntry, NoGoEntry};
+
+pub use file::{ROADMAP_REL_PATH, RoadmapFile, load};
 
 /// Assemble the roadmap lens for one evaluation date.
 ///
@@ -40,11 +41,11 @@ pub use file::{
 /// unparseable required date falls back to `evaluation_date` so the lens stays
 /// total and deterministic rather than panicking or dropping a row.
 ///
-/// `_inputs` is part of the lens signature for symmetry with the brief's other
-/// computed views; identity staleness is decided by the file alone (decision
-/// 21), so no input reading participates.
+/// Identity staleness is decided by the file alone (decision 21), so no brief
+/// input participates: the lens is a pure function of the file, the tracker
+/// records, and the date. Sorting happens before the bounds, and `review_due`
+/// plus the warnings are computed after them, over the retained lists only.
 pub fn assemble(
-    _inputs: &BriefInputs,
     file: &RoadmapFile,
     records: &[IssueRecord],
     evaluation_date: NaiveDate,
@@ -60,9 +61,9 @@ pub fn assemble(
     bets.sort_by(compare_bets);
     no_gos.sort_by(|left, right| left.id.cmp(&right.id));
 
+    let truncation = truncate(&mut bets, &mut no_gos);
     let review_due = warnings::review_due(&identity, &bets);
     let warnings = warnings::collect(&identity, &bets, &no_gos, records, evaluation_date);
-    let truncation = truncate(&mut bets, &mut no_gos);
 
     RoadmapView {
         identity,
@@ -357,7 +358,7 @@ mod tests {
         for bet in &bets {
             file.bets.push(entry(bet));
         }
-        let view = assemble(&brief_inputs(), &file, &[], today());
+        let view = assemble(&file, &[], today());
         assert_eq!(view.bets.len(), 5);
         assert!(
             view.bets.iter().all(|bet| bet.status != BetStatus::Killed),
@@ -381,7 +382,7 @@ mod tests {
             file.bets.push(entry(&bet));
         }
 
-        let view = assemble(&brief_inputs(), &file, &[], today());
+        let view = assemble(&file, &[], today());
         let ids: Vec<&str> = view.bets.iter().map(|bet| bet.id.as_str()).collect();
         assert_eq!(ids, vec!["z-oldest", "a-middle", "b-middle", "a-newest"]);
     }
@@ -404,7 +405,7 @@ mod tests {
             )));
         }
 
-        let view = assemble(&brief_inputs(), &file, &[], today());
+        let view = assemble(&file, &[], today());
         assert_eq!(view.bets.len(), 5);
         assert_eq!(view.no_gos.len(), 5);
         assert!(
@@ -435,7 +436,7 @@ mod tests {
     fn bounds_leave_short_lists_untouched() {
         let mut file = roadmap_file(identity_entry(), Vec::new(), Vec::new());
         file.bets.push(entry(&bet("only", BetStatus::Shaping)));
-        let view = assemble(&brief_inputs(), &file, &[], today());
+        let view = assemble(&file, &[], today());
         assert_eq!(view.bets.len(), 1);
         assert!(!view.truncation.applied);
         assert!(view.truncation.omitted_counts.is_empty());
@@ -444,7 +445,7 @@ mod tests {
     #[test]
     fn empty_file_is_a_present_lens() {
         let file = roadmap_file(identity_entry(), Vec::new(), Vec::new());
-        let view = assemble(&brief_inputs(), &file, &[], today());
+        let view = assemble(&file, &[], today());
         assert!(view.bets.is_empty());
         assert!(view.no_gos.is_empty());
         assert!(view.warnings.is_empty());
@@ -467,7 +468,7 @@ mod tests {
         file.no_gos
             .push(no_go_entry(&no_go("no-tracker-writes", vec!["auto-close"])));
 
-        let view = assemble(&brief_inputs(), &file, &[], today());
+        let view = assemble(&file, &[], today());
         let rendered = &view.bets[0];
         assert_eq!(rendered.id, "brief-v2");
         assert_eq!(rendered.horizon, Horizon::Next);
@@ -484,22 +485,58 @@ mod tests {
     }
 
     #[test]
-    fn warnings_are_computed_before_truncation() {
+    fn warnings_cover_retained_bets_only() {
         let mut file = roadmap_file(identity_entry(), Vec::new(), Vec::new());
         for index in 0..7 {
             let mut committed = bet(&format!("bet-{index}"), BetStatus::Committed);
             committed.admitted_at = today() - Duration::days(i64::from(index));
-            // Committed without an epic: every one of them warns.
+            // Committed without an epic: every retained one warns.
             file.bets.push(entry(&committed));
         }
-        let view = assemble(&brief_inputs(), &file, &[], today());
-        assert_eq!(view.bets.len(), 5);
-        let missing = view
+        let view = assemble(&file, &[], today());
+        let mut retained: Vec<&str> = view.bets.iter().map(|bet| bet.id.as_str()).collect();
+        assert_eq!(retained.len(), 5, "the bound keeps five bets");
+        retained.sort_unstable();
+
+        // The retained set is derived from the sorted, bounded `bets`, so the
+        // assertion cannot lock in a stale slice of ids.
+        let warned: Vec<&str> = view
             .warnings
             .iter()
             .filter(|warning| warning.code == crate::model::RoadmapWarningKind::BetEpicMissing)
-            .count();
-        assert_eq!(missing, 7, "a truncated bet still reports its advisory");
+            .map(|warning| warning.subject.as_str())
+            .collect();
+        assert_eq!(warned, retained, "a truncated bet emits no warning");
+        assert_eq!(
+            view.warnings.len(),
+            retained.len(),
+            "the warning list names retained entries only: {:?}",
+            view.warnings
+        );
+    }
+
+    #[test]
+    fn review_due_uses_retained_bets_only() {
+        let mut file = roadmap_file(identity_entry(), Vec::new(), Vec::new());
+        for index in 0..7 {
+            let mut building = bet(&format!("bet-{index}"), BetStatus::Building);
+            building.admitted_at = today() - Duration::days(i64::from(6 - index));
+            // The truncated tail declares the earliest reviews.
+            building.review_or_kill = Some(NaiveDate::from_ymd_opt(2027, 1, 1).unwrap());
+            if index < 5 {
+                building.review_or_kill = Some(
+                    NaiveDate::from_ymd_opt(2027, 3, 1 + u32::try_from(index).unwrap()).unwrap(),
+                );
+            }
+            file.bets.push(entry(&building));
+        }
+        let view = assemble(&file, &[], today());
+        assert_eq!(view.bets.len(), 5);
+        assert_eq!(
+            view.review_due.roadmap,
+            NaiveDate::from_ymd_opt(2027, 3, 1),
+            "the earliest review among retained bets, not among all bets"
+        );
     }
 
     #[test]
@@ -509,13 +546,13 @@ mod tests {
         building.admitted_at = today() - Duration::days(50);
         file.bets.push(entry(&building));
 
-        let first = assemble(&brief_inputs(), &file, &[], today());
-        let second = assemble(&brief_inputs(), &file, &[], today());
+        let first = assemble(&file, &[], today());
+        let second = assemble(&file, &[], today());
         assert_eq!(first, second);
 
         // The evaluation date is the only clock: a later date changes the
         // advisories without touching the file.
-        let later = assemble(&brief_inputs(), &file, &[], today() + Duration::days(10));
+        let later = assemble(&file, &[], today() + Duration::days(10));
         assert_ne!(first.warnings, later.warnings);
         assert_eq!(first.bets, later.bets);
     }
@@ -527,7 +564,7 @@ mod tests {
         let previous_hash = before.source_hash.clone();
 
         let file = roadmap_file(identity_entry(), Vec::new(), Vec::new());
-        let view = assemble(&inputs, &file, &[], today());
+        let view = assemble(&file, &[], today());
         let attached = attach(before, Some(view.clone()));
 
         assert_eq!(attached.schema_version, crate::model::SCHEMA_VERSION);

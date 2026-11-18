@@ -69,32 +69,36 @@ records, assembles the view, attaches it, and prints the same
 `Envelope<Brief>` as the brief (no second schema, no wrapper). `--write` targets
 `ROADMAP.md` / `ROADMAP.json` in the repository root (or `--out-dir`), through
 the same generated-artifact path as the brief renders
-(`write::write_roadmap_renders_to`). The roadmap narrative carries no whisper
-content, so the brief's `publish_whisper` gate is inherited untouched rather
-than re-implemented.
+(`write::write_roadmap_renders_to(dir, brief)`). The roadmap narrative carries
+no whisper content, so the brief's `publish_whisper` gate is inherited untouched
+rather than re-implemented.
 
-Assembly is pure: `roadmap::assemble(&inputs, &file, &records, evaluation_date)`
-takes the evaluation date as an argument, reads no clock, no filesystem, and no
+Assembly is pure: `roadmap::assemble(&file, &records, evaluation_date)` takes
+the evaluation date as an argument, reads no clock, no filesystem, and no
 process environment. `roadmap::file::load(repo)` is the only filesystem read,
 and it is the reader's job, not the assembler's.
 
-### D3. A malformed state file is a hard error; an absent one is legal
+### D3. The lens verb hard-fails on a malformed file; an absent one is legal
 
-Three cases, deliberately distinct:
+The cases, deliberately distinct:
 
 | file state | `podras brief` | `podras roadmap` |
 |---|---|---|
 | absent | no `roadmap{}` object, exit 0 | `roadmap_missing` domain error, exit 1 |
 | present, zero bets | present lens (`bets: []`) + identity row | renders the present lens |
-| TOML syntax error, unknown key, unknown enum member | `roadmap_parse_error`, exit 1 | `roadmap_parse_error`, exit 1 |
-| semantic violation (slug, uniqueness, title length, appetite, required/forbidden `review_or_kill` and `revive_when`, empty required prose, unparseable date, empty `match_terms` entry) | `roadmap_invalid`, exit 1 | `roadmap_invalid`, exit 1 |
+| TOML syntax error, unknown key, unknown enum member | omits `roadmap{}`, one warning carrying `roadmap_parse_error`, exit 0 | `roadmap_parse_error`, exit 1 |
+| unreadable bytes / non-`NotFound` IO error | omits `roadmap{}`, one warning carrying `roadmap_unreadable`, exit 0 | `roadmap_unreadable`, exit 1 |
+| semantic violation (slug, uniqueness, title length, appetite, required/forbidden `review_or_kill` and `revive_when`, empty required prose, unparseable date, empty `match_terms` entry) | omits `roadmap{}`, one warning carrying `roadmap_invalid`, exit 0 | `roadmap_invalid`, exit 1 |
 
 An absent file is not a degraded source: absence means "this repository has not
-adopted the roadmap lens", which the brief renders by omission. A malformed file
-is not degraded either: it is a human-owned file that contradicts its declared
-shape, and silently rendering a partial lens would be exactly the manufactured
-narrative the corpus forbids. Validation aggregates every violation into one
-`roadmap_invalid` message joined by `"; "`, with a suggestion pointing at
+adopted the roadmap lens", which the brief renders by omission. For
+`podras roadmap` a malformed file is not degraded either: it is a human-owned
+file that contradicts its declared shape, and silently rendering a partial lens
+would be exactly the manufactured narrative the corpus forbids. `podras brief`
+must never be blocked by an optional lens, so it degrades instead (D1 in
+"Review fixes"): the object is omitted and one curation-sourced warning carries
+the domain error's code and message. Validation aggregates every violation into
+one `roadmap_invalid` message joined by `"; "`, with a suggestion pointing at
 `docs/design.md` decision 17, so a hand-editing human fixes the file in one
 pass. Slug legality is checked with a manual ASCII loop (`^[a-z0-9][a-z0-9-]*$`)
 rather than a new dependency, and dates go through
@@ -128,12 +132,15 @@ Bounds are the shared constants `ROADMAP_BETS_BOUND = 5` and
 `ROADMAP_NO_GOS_BOUND = 5`; warnings stay unbounded. Whenever a bound drops an
 entry the view records `truncation.applied = true` and, only for non-zero
 counts, `omitted_counts["bets"]` / `omitted_counts["no_gos"]` — the same
-never-silently-truncate rule the brief applies. `review_due` is not a computed
-deadline: `identity` is `identity.next_review` and `roadmap` is the minimum
-`review_or_kill` over active bets, each `null` when nothing is outstanding.
-Because the assembler is a pure function of `(inputs, file, records,
-evaluation_date)`, two runs at the same `--as-of` produce byte-identical
-semantic output.
+never-silently-truncate rule the brief applies. The bound runs first: after the
+sort, both tables are cut to their bounds and only then are `review_due` and
+every warning computed, over the retained bets, so no warning and no review date
+names a bet the reader cannot see in `bets` (D6 in "Review fixes"). `review_due`
+is not a computed deadline: `identity` is `identity.next_review` and `roadmap`
+is the minimum `review_or_kill` over retained active bets, each `null` when
+nothing is outstanding.
+Because the assembler is a pure function of `(file, records, evaluation_date)`,
+two runs at the same `--as-of` produce byte-identical semantic output.
 
 ### D6. No verb writes `roadmap.toml` in this stage
 
@@ -146,12 +153,111 @@ hand until stage ⑦ adds verbs — which is also why the lens reports
 `roadmap_review_overdue` and `identity_review_overdue` as advisories rather
 than acting on them.
 
+## Review fixes (Rule of 5)
+
+A Rule-of-5 review of the delivered commit (`7d8c12c`) produced fourteen fixes,
+all applied by this change. The labels below are the review's; they are
+independent of the decision labels in "Decisions" above.
+
+Contracts (mirrored verbatim in the deployed spec and this change's delta):
+
+- **D1 — the brief degrades, the lens verb does not.** A malformed or unreadable
+  `.podras/roadmap.toml` makes `podras brief` omit the `roadmap` object, append
+  one warning, and exit 0; `podras roadmap` keeps the hard domain error. An
+  optional lens must never block the frozen brief narrative.
+- **D2 — the degradation warning's shape.** It is
+  `Warning { source: SourceName::Curation, code: <the domain code, or
+  "roadmap_unreadable">, detail: format!("roadmap: {message}") }`. The brief's
+  `sources[]` rows stay the five declared sources; no sixth source is invented
+  for the lens.
+- **D3 — parked state reaches the lens without a second list.** `ROADMAP.md`'s
+  "Not now (parked)" section renders the curation parked bullets first, then
+  `brief.needs_retriage` (parked entries whose resurface trigger expired), each
+  as `- <id> — <title or none> (needs re-triage: resurface trigger expired)`.
+  The parked omission marker is unchanged, because parked rendering still
+  belongs to the brief's truncation accounting.
+- **D4 — `bet_epic_missing` scope.** It fires for `committed`, `building`, and
+  `shipped` bets without an epic. A shipped commitment still owes one tracker
+  epic; only terminal `killed` is exempt.
+- **D5 — `horizon_epic_mismatch` scope.** It evaluates only non-terminal bets
+  (`shaping`, `committed`, `building`, `deferred`); `shipped` and `killed` never
+  fire it, because a closed outcome cannot be asked to move horizons.
+- **D6 — truncation precedes warnings.** After sorting and applying the 5/5
+  bounds, `review_due` and every warning are computed over the retained bets
+  only, so every warning subject and review date is visible in `bets`. A
+  consequence: the bound drops `shipped`/`killed` bets first, so a
+  terminal-status positive can only surface in a fixture small enough to retain
+  it. The spec's warnings scenario therefore uses small per-decision fixtures
+  rather than one ten-bet repository, and the envelope scenario expects only the
+  dropped `shipped` bet (not the dropped `killed` one) to have a suppressed
+  `bet_epic_missing`.
+- **D7 — the identity advisory covers passed reviews.** `identity_review_overdue`
+  fires when `next_review` is absent **or** earlier than the evaluation date.
+  Staleness rules are unchanged (`unknown` / `stale` / `fresh`), and the detail
+  distinguishes "no next_review declared" from "next_review passed on <date>".
+- **D8 — no-go tokens are Unicode-aware.** A token character is any Unicode
+  alphanumeric plus `-` and `_`; typographic hyphens U+2010..=U+2015 and U+2212
+  normalize to `-` on both the text and the term before matching, so a prose
+  hyphen copied from a document still matches a hyphenated match term.
+
+Implementation and documentation corrections:
+
+- **D9 — unreadable bytes are a domain error.** A non-`NotFound` IO error while
+  loading the state file is `Error::Domain { code: "roadmap_unreadable", … }`
+  with a suggestion, not `Error::Io`; the operator sees a roadmap problem, not a
+  generic filesystem failure.
+- **D10 — the assembler drops its unused input.** The signature is
+  `roadmap::assemble(file: &RoadmapFile, records: &[IssueRecord],
+  evaluation_date: NaiveDate) -> RoadmapView`; the `BriefInputs` parameter was
+  never read.
+- **D11 — the render writer drops its unused parameter.** It is
+  `write::write_roadmap_renders_to(dir: &Path, brief: &Brief) -> Result<()>`;
+  the `repo` argument was never read.
+- **D12 — the module re-exports only the read-path surface.**
+  `src/roadmap.rs` re-exports `load`, `RoadmapFile`, and `ROADMAP_REL_PATH`;
+  `validate`, `violations`, and the entry types stay crate-reachable through
+  `roadmap::file::…`. The file structs drop the `JsonSchema` derive and keep
+  `Serialize`/`Deserialize` — the roadmap file is input, not part of any
+  published schema.
+- **D13 — warning ordering has one implementation.** `src/brief.rs` gains
+  `pub(crate) fn sort_warnings_in_place(warnings: &mut [crate::model::Warning])`
+  delegating to a `pub(crate)` `brief::ordering::sort_warnings`; the key (source
+  declaration order, code, detail) is unchanged, so the brief and the roadmap
+  share one sort instead of two copies.
+- **D14 — the state file is documented where humans look.** README gains a
+  "Roadmap state" section with a `.podras/roadmap.toml` example, stating that
+  `ROADMAP.md` is lens-only while `ROADMAP.json` is the full brief envelope; the
+  `roadmap_missing` suggestion points at `README.md#roadmap-state` rather than
+  at an internal design note.
+
+### Measured false positive: archive duplication
+
+The review predicted that landing the change would duplicate or drop deployed
+requirement text when `openspec archive` merged the delta. Measured against the
+real archive command: it deduped and reported
+`Specs already in sync; no files changed`. No fix was made for it. The deployed
+spec and the delta instead keep their requirement and scenario sections
+byte-identical by construction, which is re-checked at review time rather than
+asserted from tool behaviour.
+
+### Accepted trade-off: `.beads/issues.jsonl` is parsed twice per brief run
+
+The brief's health path already reads tracker records, and the roadmap lens
+calls `readers::beads::read_records` itself. Threading the first read through
+would change `BriefInputs` — a struct shared by the brief, the roadmap
+assembler, and every fixture. The duplicate parse is one small file read on a
+read-only path, and buying it back with contract churn was rejected for a
+review-fix commit whose contract stays byte-identical. If a later stage adds a
+second consumer of records, the change should go through `BriefInputs` once,
+deliberately, not as a side effect of this review.
+
 ## Risks / Trade-offs
 
-- **Hard failure on a malformed file** can block `podras brief` in a repository
-  that adopted the lens carelessly. Accepted: the file is human-owned and
-  small, the aggregate error lists every violation, and degraded rendering would
-  hide a contradiction between declared boundaries and reality.
+- **Hard failure on a malformed file in `podras roadmap`** can block the lens
+  command in a repository that adopted it carelessly. Accepted: the file is
+  human-owned and small, the aggregate error lists every violation, and degraded
+  rendering would hide a contradiction between declared boundaries and reality.
+  `podras brief` is never blocked: it omits the object and warns (D1).
 - **Duplicated bounds reasoning** with the brief: both sides apply the same
   truncation discipline. The rule is shared; the section constants are not,
   because the brief's bounds are per-section and the roadmap's are per-table.

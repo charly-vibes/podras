@@ -38,6 +38,8 @@ pub(crate) const IDLE_EPIC_ID: &str = "podras-epic-idle";
 pub(crate) const FOCUS_ID: &str = "podras-a";
 /// Curated parked item; the lens renders it as "not now".
 pub(crate) const PARKED_ID: &str = "podras-f";
+/// Curated parked item whose resurface trigger has already expired.
+pub(crate) const EXPIRED_ID: &str = "podras-g";
 /// Canonical bet id.
 pub(crate) const BET_ID: &str = "brief-v2";
 /// Canonical no-go id.
@@ -83,9 +85,14 @@ pub(crate) fn roadmap_data(repo: &TempRepo) -> Value {
     roadmap_envelope(repo)["data"].clone()
 }
 
+/// Run `brief --json` and return the genesis envelope.
+pub(crate) fn brief_envelope(repo: &TempRepo) -> Value {
+    envelope(repo, "brief")
+}
+
 /// Run `brief --json` and return its typed payload.
 pub(crate) fn brief_data(repo: &TempRepo) -> Value {
-    envelope(repo, "brief")["data"].clone()
+    brief_envelope(repo)["data"].clone()
 }
 
 /// Run the roadmap narrative pinned to the fixture date.
@@ -115,7 +122,7 @@ pub(crate) fn view(repo: &TempRepo) -> RoadmapView {
     let evaluation = date(AS_OF);
     let file = load_required(repo.root());
     let records = read_records(repo.root());
-    assemble(&brief_inputs(repo), &file, &records, evaluation)
+    assemble(&file, &records, evaluation)
 }
 
 /// Load the roadmap file that a fixture must have written.
@@ -515,6 +522,120 @@ pub(crate) fn warnings_roadmap() -> String {
         .map(|bet| bet.render())
         .collect();
     roadmap_file(&identity(None), &bets, &[])
+}
+
+/// Curation with the canonical parked item plus one expired resurface trigger.
+pub(crate) fn curation_with_expired(resurface: &str) -> String {
+    format!(
+        "{CURATION}\n[[parked]]\nid = \"{EXPIRED_ID}\"\nreason = \"harvest waits for demand\"\n\
+         resurface = \"{resurface}\"\nparked_at = \"2026-11-01\"\nconfirmed_at = \"2026-11-01\"\n"
+    )
+}
+
+/// A committed lens with one still-parked and one expired parked entry.
+///
+/// `title` seeds the expired entry's tracker row; `None` leaves the entry
+/// untracked, which is the `none` half of the lens's `<title or none>` field.
+pub(crate) fn expired_park_fixture(title: Option<&str>) -> TempRepo {
+    let repo = TempRepo::new();
+    let mut rows = vec![BeadRow {
+        id: PARKED_ID,
+        title: "Harvest v1.1",
+        status: "open",
+        labels: &[],
+        updated_at: "2026-11-10T00:00:00Z",
+    }];
+    if let Some(title) = title {
+        rows.push(BeadRow {
+            id: EXPIRED_ID,
+            title,
+            status: "open",
+            labels: &[],
+            updated_at: "2026-11-10T00:00:00Z",
+        });
+    }
+    repo.beads_jsonl_rows(&rows);
+    repo.curation(&curation_with_expired("2026-11-01"));
+    repo.roadmap(&empty_roadmap());
+    repo.commit("expired park fixture");
+    repo
+}
+
+/// Terminal bets plus the two statuses that still owe an epic.
+///
+/// `shipped-closed` and `killed-closed` are terminal while their epic is closed;
+/// `deferred-closed` is non-terminal with the same epic. Only the last may fire
+/// `horizon_epic_mismatch`, and only `building`/`shipped` may report a missing
+/// epic — `killed` is exempt.
+pub(crate) fn terminal_bets_roadmap() -> String {
+    let bets = [
+        BetSpec::new("shipped-closed", "Ship the graph view", "shipped", "later")
+            .with_epic(CLOSED_EPIC_ID),
+        BetSpec::new("killed-closed", "Kill the graph view", "killed", "later")
+            .with_epic(CLOSED_EPIC_ID)
+            .with_killed_reason("no value-prop evidence"),
+        BetSpec::new(
+            "deferred-closed",
+            "Defer the graph view",
+            "deferred",
+            "later",
+        )
+        .with_epic(CLOSED_EPIC_ID)
+        .with_revive_when("when the graph asks for itself"),
+        BetSpec::new("building-no-epic", "Build the lens", "building", "next")
+            .with_review_or_kill("2026-12-30"),
+        BetSpec::new("shipped-no-epic", "Ship the lens", "shipped", "later"),
+    ];
+    let rendered: Vec<String> = bets.iter().map(|bet| bet.render()).collect();
+    roadmap_file(&identity(Some("2027-05-18")), &rendered, &[])
+}
+
+/// Seven active bets whose review dates all passed, with the earliest review
+/// dates on the two bets the 5/5 bound drops last.
+///
+/// This proves truncation precedes `review_due` and the warnings: a
+/// pre-truncation computation would report `2026-09-01` and name `bet-06` and
+/// `bet-07`, which the lens never shows.
+pub(crate) fn review_passed_roadmap() -> String {
+    let bets = [
+        BetSpec::new("bet-01", "Hold the first bet", "building", "now")
+            .with_epic(EPIC_ID)
+            .with_appetite(12)
+            .with_review_or_kill("2026-10-10")
+            .admitted("2026-10-01", "2026-10-01"),
+        BetSpec::new("bet-02", "Hold the second bet", "building", "now")
+            .with_epic(EPIC_ID)
+            .with_appetite(12)
+            .with_review_or_kill("2026-10-11")
+            .admitted("2026-10-02", "2026-10-02"),
+        BetSpec::new("bet-03", "Hold the third bet", "building", "now")
+            .with_epic(EPIC_ID)
+            .with_appetite(12)
+            .with_review_or_kill("2026-10-12")
+            .admitted("2026-10-03", "2026-10-03"),
+        BetSpec::new("bet-04", "Hold the fourth bet", "building", "now")
+            .with_epic(EPIC_ID)
+            .with_appetite(12)
+            .with_review_or_kill("2026-10-13")
+            .admitted("2026-10-04", "2026-10-04"),
+        BetSpec::new("bet-05", "Hold the fifth bet", "building", "now")
+            .with_epic(EPIC_ID)
+            .with_appetite(12)
+            .with_review_or_kill("2026-10-14")
+            .admitted("2026-10-05", "2026-10-05"),
+        BetSpec::new("bet-06", "Hold the sixth bet", "building", "now")
+            .with_epic(EPIC_ID)
+            .with_appetite(12)
+            .with_review_or_kill("2026-09-01")
+            .admitted("2026-10-06", "2026-10-06"),
+        BetSpec::new("bet-07", "Hold the seventh bet", "building", "now")
+            .with_epic(EPIC_ID)
+            .with_appetite(12)
+            .with_review_or_kill("2026-09-02")
+            .admitted("2026-10-07", "2026-10-07"),
+    ];
+    let rendered: Vec<String> = bets.iter().map(|bet| bet.render()).collect();
+    roadmap_file(&identity(Some("2027-05-18")), &rendered, &[])
 }
 
 /// Tracker export for the canonical lens: one open, recently moved epic.

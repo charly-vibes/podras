@@ -196,6 +196,51 @@ fn roadmap_determinism() {
         stabilized(json_second["data"].clone()),
         "the written envelope is reproducible under the pinned date"
     );
+
+    // A degraded brief is deterministic too: the same broken state file yields
+    // the same curation warning and never a `roadmap` object.
+    let degraded = TempRepo::new();
+    degraded.curation(CURATION);
+    degraded.roadmap("[[bets]\nid = \"x\"\n");
+    degraded.commit("corrupted roadmap fixture");
+
+    let degraded_payload = || {
+        serde_json::from_str::<Value>(&stdout(&degraded, &["brief", "--json", "--as-of", AS_OF]))
+            .expect("brief --json emits an envelope")
+    };
+    let first_degraded = degraded_payload();
+    let second_degraded = degraded_payload();
+    assert_eq!(
+        first_degraded["ok"], true,
+        "a broken lens is not a failed brief: {first_degraded}"
+    );
+    assert!(
+        first_degraded["data"].get("roadmap").is_none(),
+        "the degraded brief omits the lens: {}",
+        first_degraded["data"]
+    );
+    assert_eq!(
+        stabilized(first_degraded["data"].clone()),
+        stabilized(second_degraded["data"].clone()),
+        "the degraded brief is reproducible under the pinned date"
+    );
+    let roadmap_warnings: Vec<&Value> = first_degraded["data"]["warnings"]
+        .as_array()
+        .expect("the brief carries warnings")
+        .iter()
+        .filter(|warning| {
+            warning["code"]
+                .as_str()
+                .is_some_and(|code| code.starts_with("roadmap_"))
+        })
+        .collect();
+    assert_eq!(
+        roadmap_warnings.len(),
+        1,
+        "one warning records the broken file: {}",
+        first_degraded["data"]
+    );
+    assert_eq!(roadmap_warnings[0]["source"], "curation");
 }
 
 #[test]
@@ -273,6 +318,13 @@ fn roadmap_no_go_discipline() {
             labels: &[],
             updated_at: "2026-11-17T00:00:00Z",
         },
+        BeadRow {
+            id: "podras-eacute",
+            title: "éauto-close is a different token",
+            status: "open",
+            labels: &[],
+            updated_at: "2026-11-17T00:00:00Z",
+        },
     ]);
     repo.roadmap(&roadmap_file(
         &identity(Some("2027-05-18")),
@@ -323,6 +375,10 @@ fn roadmap_no_go_discipline() {
     assert!(
         !provenance.contains("podras-autoclose"),
         "`autoclose` is a different token from `auto-close`: {provenance}"
+    );
+    assert!(
+        !provenance.contains("podras-eacute"),
+        "a Unicode letter is a token character, so `éauto-close` does not match: {provenance}"
     );
 
     // The narrative marks the same candidate and nothing else changed.

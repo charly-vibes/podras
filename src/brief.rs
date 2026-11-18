@@ -124,6 +124,15 @@ pub struct BriefInputs {
     pub generated_at: DateTime<Utc>,
 }
 
+/// Re-sort warnings in place with the brief's canonical warning order.
+///
+/// Assembly already sorts its own warnings; a caller that appends one
+/// afterwards (the roadmap degradation path) calls this to restore the same
+/// order: source declaration order, then code, then detail.
+pub(crate) fn sort_warnings_in_place(warnings: &mut [crate::model::Warning]) {
+    ordering::sort_warnings(warnings);
+}
+
 /// Compose a brief from observed inputs.
 pub fn assemble(inputs: &BriefInputs) -> Brief {
     let evaluation_date = inputs.as_of.unwrap_or(inputs.now);

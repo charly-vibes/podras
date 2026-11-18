@@ -9,8 +9,10 @@
 //! Rationale: roadmap health is named advisories, never a verdict: nothing here
 //! touches `Health` or an exit code. Every predicate is a pure function of the
 //! validated file, the tracker records, and the pinned evaluation date, so two
-//! runs over identical inputs emit identical warnings. The one tunable is the
-//! circuit breaker factor, kept here as the in-code default for the
+//! runs over identical inputs emit identical warnings. Callers pass the bets
+//! and no-gos that survived the render bounds, so every warning subject is an
+//! entry the lens actually shows. The one tunable is the circuit breaker
+//! factor, kept here as the in-code default for the
 //! `roadmap.circuit_breaker_factor` config key (decision 23).
 
 use chrono::NaiveDate;
@@ -64,10 +66,10 @@ pub(super) fn active(status: BetStatus) -> bool {
 
 /// Earliest outstanding review per source.
 ///
-/// `roadmap` is the minimum `review_or_kill` among active bets; a bet that is
-/// shaping, deferred, shipped, or killed commits to no review, so it cannot
-/// pull the date earlier. Neither field is a deadline: both are dates humans
-/// already declared.
+/// `roadmap` is the minimum `review_or_kill` among retained active bets; a bet
+/// that is shaping, deferred, shipped, or killed commits to no review, so it
+/// cannot pull the date earlier. Neither field is a deadline: both are dates
+/// humans already declared.
 pub(super) fn review_due(identity: &IdentityView, bets: &[BetView]) -> ReviewDue {
     let roadmap = bets
         .iter()
@@ -82,6 +84,8 @@ pub(super) fn review_due(identity: &IdentityView, bets: &[BetView]) -> ReviewDue
 
 /// Collect every roadmap warning for the evaluated file.
 ///
+/// `bets` and `no_gos` are the retained, post-bound lists: a truncated entry
+/// never emits a warning, so every subject can be found in the rendered view.
 /// Warning lists are never bounded; ordering happens here so the lens never
 /// depends on hash-map or file iteration order.
 pub(super) fn collect(
@@ -93,12 +97,20 @@ pub(super) fn collect(
 ) -> Vec<RoadmapWarning> {
     let mut warnings = Vec::new();
 
-    if identity.next_review.is_none() {
-        warnings.push(RoadmapWarning {
+    // An absent schedule is never fresh, and a passed one is the same
+    // advisory: the detail keeps the two cases distinguishable.
+    match identity.next_review {
+        None => warnings.push(RoadmapWarning {
             code: RoadmapWarningKind::IdentityReviewOverdue,
             subject: IDENTITY_SUBJECT.to_string(),
             detail: "no next_review declared; identity staleness is unknown".to_string(),
-        });
+        }),
+        Some(date) if date < evaluation_date => warnings.push(RoadmapWarning {
+            code: RoadmapWarningKind::IdentityReviewOverdue,
+            subject: IDENTITY_SUBJECT.to_string(),
+            detail: format!("next_review passed on {date}"),
+        }),
+        Some(_) => {}
     }
 
     for bet in bets {
@@ -139,14 +151,6 @@ fn bet_warnings(
             });
         }
 
-        if bet.status == BetStatus::Committed && bet.epic.is_none() {
-            warnings.push(RoadmapWarning {
-                code: RoadmapWarningKind::BetEpicMissing,
-                subject: bet.id.clone(),
-                detail: "committed bet declares no epic".to_string(),
-            });
-        }
-
         if let Some(review_or_kill) = bet.review_or_kill
             && review_or_kill < evaluation_date
         {
@@ -156,6 +160,17 @@ fn bet_warnings(
                 detail: format!("review_or_kill passed on {review_or_kill}"),
             });
         }
+    }
+
+    // A bet that has committed work behind it — or shipped it — must name the
+    // tracker epic that carries the evidence; shaping, deferred, and killed bets
+    // legitimately have none.
+    if needs_epic(bet.status) && bet.epic.is_none() {
+        warnings.push(RoadmapWarning {
+            code: RoadmapWarningKind::BetEpicMissing,
+            subject: bet.id.clone(),
+            detail: format!("{} bet declares no epic", lifecycle_name(bet.status)),
+        });
     }
 
     let epic = bet
@@ -183,27 +198,56 @@ fn bet_warnings(
         }
     }
 
-    match bet.horizon {
-        Horizon::Now if epic.is_none_or(|record| !record.open) => {
-            let detail = match bet.epic.as_deref() {
-                Some(id) => format!("horizon is now but epic `{id}` is missing or closed"),
-                None => "horizon is now but no epic is linked".to_string(),
-            };
-            warnings.push(RoadmapWarning {
-                code: RoadmapWarningKind::HorizonEpicMismatch,
-                subject: bet.id.clone(),
-                detail,
-            });
+    // Shipped and killed bets are terminal: their horizon no longer promises
+    // anything about open epics, so the mismatch code never fires for them.
+    if horizon_applies(bet.status) {
+        match bet.horizon {
+            Horizon::Now if epic.is_none_or(|record| !record.open) => {
+                let detail = match bet.epic.as_deref() {
+                    Some(id) => format!("horizon is now but epic `{id}` is missing or closed"),
+                    None => "horizon is now but no epic is linked".to_string(),
+                };
+                warnings.push(RoadmapWarning {
+                    code: RoadmapWarningKind::HorizonEpicMismatch,
+                    subject: bet.id.clone(),
+                    detail,
+                });
+            }
+            Horizon::Later if epic.is_some_and(|record| !record.open) => {
+                let epic_id = bet.epic.as_deref().unwrap_or_default();
+                warnings.push(RoadmapWarning {
+                    code: RoadmapWarningKind::HorizonEpicMismatch,
+                    subject: bet.id.clone(),
+                    detail: format!("horizon is later but epic `{epic_id}` is closed"),
+                });
+            }
+            _ => {}
         }
-        Horizon::Later if epic.is_some_and(|record| !record.open) => {
-            let epic_id = bet.epic.as_deref().unwrap_or_default();
-            warnings.push(RoadmapWarning {
-                code: RoadmapWarningKind::HorizonEpicMismatch,
-                subject: bet.id.clone(),
-                detail: format!("horizon is later but epic `{epic_id}` is closed"),
-            });
-        }
-        _ => {}
+    }
+}
+
+/// True for the statuses that must name the tracker epic backing the bet.
+fn needs_epic(status: BetStatus) -> bool {
+    matches!(
+        status,
+        BetStatus::Committed | BetStatus::Building | BetStatus::Shipped
+    )
+}
+
+/// True for the non-terminal statuses whose horizon still constrains the epic.
+fn horizon_applies(status: BetStatus) -> bool {
+    !matches!(status, BetStatus::Shipped | BetStatus::Killed)
+}
+
+/// Lifecycle name used in warning details.
+fn lifecycle_name(status: BetStatus) -> &'static str {
+    match status {
+        BetStatus::Shaping => "shaping",
+        BetStatus::Committed => "committed",
+        BetStatus::Building => "building",
+        BetStatus::Deferred => "deferred",
+        BetStatus::Shipped => "shipped",
+        BetStatus::Killed => "killed",
     }
 }
 
@@ -244,17 +288,20 @@ fn bead_matches(record: &IssueRecord, term: &str) -> bool {
 
 /// True when `term` occurs in `text` delimited as a whole token.
 ///
-/// Both sides are lowercased. A token character is `[a-z0-9_-]`, so
-/// `auto-close` matches `block auto-close, always` but never `autoclose` or
-/// `x_auto-close`, where the surrounding characters are still token
-/// characters. An empty term matches nothing: it is a validation error, and
-/// treating it as a match would make corrupt input fire everywhere.
+/// Both sides are lowercased and typographic hyphens are folded first. A token
+/// character is any Unicode alphanumeric plus `-` and `_`, so `auto-close`
+/// matches `block auto-close, always` but never `autoclose`, `éauto-close`, or
+/// `x_auto-close`, where the surrounding characters are still token characters.
+/// U+2010..=U+2015 and U+2212 normalize to `-`, so a hand-typed `auto‑close`
+/// matches the declared ASCII term. An empty term matches nothing: it is a
+/// validation error, and treating it as a match would make corrupt input fire
+/// everywhere.
 pub(crate) fn token_matches(text: &str, term: &str) -> bool {
-    let term = term.to_lowercase();
+    let term = normalize(term);
     if term.is_empty() {
         return false;
     }
-    let text = text.to_lowercase();
+    let text = normalize(text);
     let mut offset = 0;
     while let Some(found) = text[offset..].find(&term) {
         let start = offset + found;
@@ -277,8 +324,24 @@ pub(crate) fn token_matches(text: &str, term: &str) -> bool {
     false
 }
 
+/// Fold typographic hyphens and the minus sign to `-`, then lowercase.
+///
+/// The fold happens before matching so text and term compare byte-for-byte;
+/// `to_lowercase` may expand a character, so callers keep using the returned
+/// string rather than the original offsets.
+fn normalize(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| match character {
+            '\u{2010}'..='\u{2015}' | '\u{2212}' => '-',
+            other => other,
+        })
+        .collect::<String>()
+        .to_lowercase()
+}
+
 fn is_token_char(character: char) -> bool {
-    character.is_ascii_alphanumeric() || character == '-' || character == '_'
+    character.is_alphanumeric() || character == '-' || character == '_'
 }
 
 /// Sort warnings by code declaration order, then subject, then detail.
@@ -351,7 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn identity_review_overdue_fires_only_without_next_review() {
+    fn identity_review_overdue_fires_without_or_past_next_review() {
         let evaluation = today();
         let no_schedule = identity_view(None);
         let warnings = collect(&no_schedule, &[], &[], &[], evaluation);
@@ -360,6 +423,27 @@ mod tests {
             vec![RoadmapWarningKind::IdentityReviewOverdue]
         );
         assert_eq!(warnings[0].subject, "identity");
+        assert!(
+            warnings[0].detail.contains("no next_review declared"),
+            "{}",
+            warnings[0].detail
+        );
+
+        // A passed date is the same advisory, with the date as evidence.
+        let passed = identity_view(Some("2026-11-17"));
+        let warnings = collect(&passed, &[], &[], &[], evaluation);
+        assert_eq!(
+            codes(&warnings),
+            vec![RoadmapWarningKind::IdentityReviewOverdue]
+        );
+        assert_eq!(
+            warnings[0].detail, "next_review passed on 2026-11-17",
+            "the detail distinguishes a passed review from an absent one"
+        );
+
+        // Due today and later both count as scheduled.
+        let due_today = identity_view(Some("2026-11-18"));
+        assert!(collect(&due_today, &[], &[], &[], evaluation).is_empty());
 
         let scheduled = identity_view(Some("2027-01-01"));
         assert!(collect(&scheduled, &[], &[], &[], evaluation).is_empty());
@@ -368,14 +452,19 @@ mod tests {
     #[test]
     fn age_warnings_escalate_to_the_circuit_breaker() {
         let evaluation = today();
+        // Each fixture names an open, freshly updated epic so the age predicate
+        // is isolated: no epic-state code fires alongside it.
+        let open_epic = |id: &str| record(id, id, true, Some(today_instant()));
+
         let mut over = bet("over", BetStatus::Building);
         over.appetite_weeks = 6;
         over.admitted_at = today() - chrono::Duration::days(43);
+        over.epic = Some("epic-over".to_string());
         let warnings = collect(
             &identity_view(Some("2027-01-01")),
             &[over],
             &[],
-            &[],
+            &[open_epic("epic-over")],
             evaluation,
         );
         assert_eq!(
@@ -386,11 +475,12 @@ mod tests {
         let mut breaker = bet("breaker", BetStatus::Building);
         breaker.appetite_weeks = 6;
         breaker.admitted_at = today() - chrono::Duration::days(53);
+        breaker.epic = Some("epic-breaker".to_string());
         let warnings = collect(
             &identity_view(Some("2027-01-01")),
             &[breaker],
             &[],
-            &[],
+            &[open_epic("epic-breaker")],
             evaluation,
         );
         assert_eq!(
@@ -402,12 +492,13 @@ mod tests {
         let mut exactly = bet("exactly", BetStatus::Building);
         exactly.appetite_weeks = 6;
         exactly.admitted_at = today() - chrono::Duration::days(42);
+        exactly.epic = Some("epic-exactly".to_string());
         assert!(
             collect(
                 &identity_view(Some("2027-01-01")),
                 &[exactly],
                 &[],
-                &[],
+                &[open_epic("epic-exactly")],
                 evaluation
             )
             .is_empty()
@@ -440,21 +531,44 @@ mod tests {
     }
 
     #[test]
-    fn committed_without_epic_fires() {
+    fn committed_building_and_shipped_without_epic_fire() {
         let evaluation = today();
-        let mut committed = bet("no-epic", BetStatus::Committed);
-        committed.epic = None;
-        let warnings = collect(
-            &identity_view(Some("2027-01-01")),
-            &[committed],
-            &[],
-            &[],
-            evaluation,
-        );
-        assert!(
-            codes(&warnings).contains(&RoadmapWarningKind::BetEpicMissing),
-            "{warnings:?}"
-        );
+        for status in [
+            BetStatus::Committed,
+            BetStatus::Building,
+            BetStatus::Shipped,
+        ] {
+            let mut without_epic = bet("no-epic", status);
+            without_epic.epic = None;
+            let warnings = collect(
+                &identity_view(Some("2027-01-01")),
+                &[without_epic],
+                &[],
+                &[],
+                evaluation,
+            );
+            assert!(
+                codes(&warnings).contains(&RoadmapWarningKind::BetEpicMissing),
+                "{status:?}: {warnings:?}"
+            );
+        }
+
+        // Shaping, deferred, and killed bets may legitimately have no epic.
+        for status in [BetStatus::Shaping, BetStatus::Deferred, BetStatus::Killed] {
+            let mut without_epic = bet("no-epic", status);
+            without_epic.epic = None;
+            let warnings = collect(
+                &identity_view(Some("2027-01-01")),
+                &[without_epic],
+                &[],
+                &[],
+                evaluation,
+            );
+            assert!(
+                !codes(&warnings).contains(&RoadmapWarningKind::BetEpicMissing),
+                "{status:?}: {warnings:?}"
+            );
+        }
     }
 
     #[test]
@@ -536,6 +650,37 @@ mod tests {
     }
 
     #[test]
+    fn terminal_bets_never_report_horizon_mismatch() {
+        let evaluation = today();
+        let identity = identity_view(Some("2027-01-01"));
+
+        for status in [BetStatus::Shipped, BetStatus::Killed] {
+            // `now` with no epic would fire for a non-terminal bet.
+            let mut now_no_epic = bet("terminal-now", status);
+            now_no_epic.horizon = Horizon::Now;
+            now_no_epic.epic = None;
+            let closed = record("podras-abc", "podras-abc", false, Some(today_instant()));
+
+            // `later` with a closed epic would also fire for a non-terminal bet.
+            let mut later_closed = bet("terminal-later", status);
+            later_closed.horizon = Horizon::Later;
+            later_closed.epic = Some("podras-abc".to_string());
+
+            let warnings = collect(
+                &identity,
+                &[now_no_epic, later_closed],
+                &[],
+                &[closed],
+                evaluation,
+            );
+            assert!(
+                !codes(&warnings).contains(&RoadmapWarningKind::HorizonEpicMismatch),
+                "{status:?}: {warnings:?}"
+            );
+        }
+    }
+
+    #[test]
     fn review_or_kill_passed_fires() {
         let evaluation = today();
         let mut active_bet = bet("active", BetStatus::Committed);
@@ -594,6 +739,25 @@ mod tests {
         assert!(token_matches("(auto-promote)", "auto-promote"));
         assert!(token_matches("auto-promote.", "auto-promote"));
         assert!(!token_matches("auto-promotion", "auto-promote"));
+        assert!(
+            !token_matches("éauto-close", "auto-close"),
+            "accented letters are token chars, so the term is not delimited"
+        );
+        assert!(!token_matches("auto-clöse", "auto-close"));
+    }
+
+    #[test]
+    fn token_matching_folds_typographic_hyphens() {
+        // U+2011 non-breaking hyphen, as typed by a word processor.
+        assert!(token_matches("auto‑close", "auto-close"));
+        assert!(token_matches("auto-close", "auto‑close"));
+        // U+2010..=U+2015 all fold to `-`; the endpoints prove the range.
+        assert!(token_matches("auto\u{2010}close", "auto-close"));
+        assert!(token_matches("auto\u{2015}close", "auto-close"));
+        // U+2212 minus sign folds too.
+        assert!(token_matches("auto\u{2212}close", "auto-close"));
+        // The folded term still obeys boundaries.
+        assert!(!token_matches("x_auto‑close", "auto-close"));
     }
 
     #[test]

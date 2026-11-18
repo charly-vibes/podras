@@ -1,8 +1,9 @@
 //! Purpose: render the roadmap lens as a standalone markdown narrative.
 //!
 //! Responsibilities:
-//! - render identity, bets grouped by horizon/status, parked items, no-gos, and
-//!   advisory warnings in one fixed order;
+//! - render identity, bets grouped by horizon/status, parked items (including
+//!   those whose resurface trigger expired), no-gos, and advisory warnings in
+//!   one fixed order;
 //! - keep every value on one line and every empty section an explicit `none`;
 //! - report truncation for bets and parked items.
 //!
@@ -103,15 +104,32 @@ fn render_bet_group(out: &mut String, view: &RoadmapView, group: Group) {
     }
 }
 
+/// Render the parked section: curated parked items first, then the entries
+/// whose resurface trigger expired and that curation therefore wants
+/// re-triaged.
+///
+/// The omission marker belongs to the bounded parked list (`parked` in the
+/// brief's `truncation`); expired entries are not bounded. Empty means `none`
+/// only when both lists are empty.
 fn render_parked(out: &mut String, brief: &Brief) {
     push_heading(out, "## ", "Not now (parked)");
-    if brief.parked.is_empty() {
+    if brief.parked.is_empty() && brief.needs_retriage.is_empty() {
         push_text(out, NONE);
     } else {
         for item in &brief.parked {
             push_text(out, &parked_line(item));
         }
-        push_omitted(out, brief.truncation.omitted_counts.get("parked").copied());
+        if !brief.parked.is_empty() {
+            push_omitted(out, brief.truncation.omitted_counts.get("parked").copied());
+        }
+        for item in &brief.needs_retriage {
+            let line = format!(
+                "- {} — {} (needs re-triage: resurface trigger expired)",
+                oneline(&item.id),
+                field(item.title.as_deref())
+            );
+            push_text(out, &line);
+        }
     }
     out.push('\n');
 }

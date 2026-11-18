@@ -51,7 +51,7 @@ pub(super) fn sort_recent(items: &mut [RecentEvent]) {
     });
 }
 
-pub(super) fn sort_warnings(warnings: &mut [Warning]) {
+pub(crate) fn sort_warnings(warnings: &mut [Warning]) {
     warnings.sort_by(|left, right| {
         left.source
             .declaration_order()

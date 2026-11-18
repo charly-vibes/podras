@@ -17,7 +17,6 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::curation::parse_human_date;
@@ -36,7 +35,7 @@ const TITLE_MAX_CHARS: usize = 60;
 /// identity row (decision 24), so a file without it is not a roadmap. Bets and
 /// no-gos default to empty, which is what makes a present file with zero bets a
 /// present — not absent — lens.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RoadmapFile {
     /// What the project ought to be, and when it was last reviewed.
@@ -50,7 +49,7 @@ pub struct RoadmapFile {
 }
 
 /// The `[identity]` table.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct IdentityEntry {
     /// Link to the prose stating the project's purpose.
@@ -63,7 +62,7 @@ pub struct IdentityEntry {
 }
 
 /// One `[[bets]]` entry.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BetEntry {
     /// Slug identifier, unique among bets.
@@ -100,7 +99,7 @@ pub struct BetEntry {
 }
 
 /// One `[[no_gos]]` entry.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NoGoEntry {
     /// Slug identifier, unique among no-gos.
@@ -122,13 +121,26 @@ pub struct NoGoEntry {
 ///
 /// Absence is legal and is not this layer's error. A malformed file is
 /// `roadmap_parse_error`; a well-formed file that violates a semantic rule is
-/// `roadmap_invalid` with every violation joined by `"; "`.
+/// `roadmap_invalid` with every violation joined by `"; "`. A file that exists
+/// but cannot be read (permissions, a directory in its place, invalid UTF-8)
+/// is `roadmap_unreadable`, a domain error like the other two: the verb that
+/// needs the lens fails hard, while the brief degrades it to a warning.
 pub fn load(repo: &Path) -> Result<Option<RoadmapFile>> {
     let path = repo.join(ROADMAP_REL_PATH);
     let raw = match std::fs::read_to_string(&path) {
         Ok(raw) => raw,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(Error::Io(error)),
+        Err(error) => {
+            return Err(Error::Domain {
+                code: "roadmap_unreadable",
+                message: format!("{ROADMAP_REL_PATH}: {error}"),
+                suggestion: Some(
+                    "make .podras/roadmap.toml a readable file, or delete it when the project has \
+                     no roadmap"
+                        .to_string(),
+                ),
+            });
+        }
     };
     let file: RoadmapFile = toml::from_str(&raw).map_err(|error| Error::Domain {
         code: "roadmap_parse_error",
@@ -707,6 +719,34 @@ bogus = "nope"
 "#,
         );
         assert!(parsed.is_err(), "unknown keys must be rejected by serde");
+    }
+
+    #[test]
+    fn unreadable_roadmap_is_a_domain_error() {
+        let repo = tempfile::tempdir().expect("temp repo");
+        std::fs::create_dir_all(repo.path().join(".podras")).expect("create .podras");
+        // Bytes that are not UTF-8: the file exists but cannot be read as text.
+        std::fs::write(repo.path().join(ROADMAP_REL_PATH), [0xFF, 0xFE, 0x00])
+            .expect("write unreadable roadmap");
+
+        let error = load(repo.path()).expect_err("unreadable content is not a roadmap");
+        match error {
+            Error::Domain {
+                code,
+                message,
+                suggestion,
+            } => {
+                assert_eq!(code, "roadmap_unreadable");
+                assert!(message.contains(ROADMAP_REL_PATH), "{message}");
+                assert!(
+                    suggestion
+                        .as_deref()
+                        .is_some_and(|fix| fix.contains("readable")),
+                    "the error names the fix: {suggestion:?}"
+                );
+            }
+            other => panic!("expected a domain error, got {other:?}"),
+        }
     }
 
     #[test]

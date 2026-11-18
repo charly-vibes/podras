@@ -45,19 +45,25 @@ Three gaps remain after v1.1:
   `horizon: now|next|later`,
   `status: shaping|committed|building|deferred|shipped|killed`,
   `enforcement: automated|human_review`. Verbs and humans write it; agents never
-  edit it. An absent file is legal for `brief`; a malformed or semantically
-  invalid one is a hard domain error (`roadmap_parse_error` / `roadmap_invalid`)
-  in both `podras brief` and `podras roadmap`, never a degraded source.
+  edit it. An absent file is legal for `brief`; a malformed or unreadable one is
+  a hard domain error (`roadmap_parse_error` / `roadmap_invalid` /
+  `roadmap_unreadable`) in `podras roadmap`, while `podras brief` must never be
+  blocked by an optional lens: it omits the `roadmap{}` object, appends one
+  curation-sourced warning carrying that code, and exits 0.
 - **`podras roadmap [--json] [--as-of <date>] [--write]`** — a read-only verb
   that reuses the brief read path and emits the same envelope. Parked tasks stay
-  in `curation.toml`; the lens renders them as the "not now" column and never
-  copies them. `--write` produces committed `ROADMAP.md` / `ROADMAP.json` with
-  the same generated-artifact semantics as `BRIEF.md` / `BRIEF.json`.
+  in `curation.toml`; the lens's "Not now (parked)" column renders those parked
+  entries and then every entry whose resurface trigger expired, marked
+  `(needs re-triage: resurface trigger expired)`, and never copies them into
+  roadmap state. `--write` produces committed `ROADMAP.md` (the lens only) and
+  `ROADMAP.json` (the full brief envelope) with the same generated-artifact
+  semantics as `BRIEF.md` / `BRIEF.json`.
 - **Identity is linked, never generated** — the lens renders `path`,
   `last_reviewed`, `next_review`, and staleness only. Staleness reads
-  `next_review` alone: absent ⇒ `unknown` plus the `identity_review_overdue`
-  advisory and never `fresh`; passed ⇒ `stale`; equal or later ⇒ `fresh`. No
-  verb rewrites identity prose.
+  `next_review` alone: absent ⇒ `unknown` and never `fresh`; passed ⇒ `stale`;
+  equal or later ⇒ `fresh`. The `identity_review_overdue` advisory fires when
+  `next_review` is absent or has passed, its detail naming which. No verb
+  rewrites identity prose.
 - **Bets have a closed lifecycle** — `shaping → committed → building → shipped`,
   plus `deferred` (from shaping, committed, or building: stopping mid-build is a
   deferral, not a fifth state, and carries `revive_when`) and `killed` from any
@@ -66,19 +72,23 @@ Three gaps remain after v1.1:
 - **No-gos are first-class boundaries** — each carries the "because" (`reason`),
   a declared enforcement tier (`automated` only where a real check exists,
   otherwise honest `human_review`), and `revoke_by`. `match_terms` are matched
-  case-insensitively as whole tokens against open bead titles and labels; the
-  first match emits `no_go_violation_candidate` with the bead and the term. A
-  no-go with empty `match_terms` never fires. Nothing is closed, promoted, or
-  written.
+  case-insensitively as whole tokens against open bead titles and labels, where
+  a token character is any Unicode alphanumeric plus `-` or `_` and the
+  typographic hyphens U+2010..U+2015 and U+2212 normalize to `-` on both text
+  and term; the first match emits `no_go_violation_candidate` with the bead and
+  the term. A no-go with empty `match_terms` never fires. Nothing is closed,
+  promoted, or written.
 - **Roadmap health is named warnings, never a verdict** — a distinct
   `RoadmapWarningKind` enum carried in `roadmap.warnings`, never a `SignalKind`
   and never in `health.signals`: `bet_age_exceeds_appetite` escalating to
   `circuit_breaker_due` at the module constant
-  `roadmap.circuit_breaker_factor` (1.25), `bet_epic_missing`,
-  `bet_epic_closed_not_retired`, `bet_no_transition` (14-day window),
-  `horizon_epic_mismatch`, `no_go_violation_candidate`,
-  `identity_review_overdue`, `roadmap_review_overdue`. Exit is always 0; there
-  is no auto-kill and no auto-promote.
+  `roadmap.circuit_breaker_factor` (1.25), `bet_epic_missing` (for `committed`,
+  `building`, and `shipped` bets), `bet_epic_closed_not_retired`,
+  `bet_no_transition` (14-day window), `horizon_epic_mismatch` (non-terminal
+  bets only: `shaping`, `committed`, `building`, `deferred`),
+  `no_go_violation_candidate`, `identity_review_overdue`,
+  `roadmap_review_overdue`. Exit is always 0; there is no auto-kill and no
+  auto-promote.
 - **Envelope is additive** — an optional top-level `roadmap{}` in the existing
   brief envelope carrying `identity{}`, `bets[]`, `no_gos[]`, `warnings[]`,
   `review_due{identity, roadmap}`, and `truncation`. `schema_version` stays the
@@ -89,9 +99,12 @@ Three gaps remain after v1.1:
 - **Bounded and deterministic** — 5 bets by status rank (`building`,
   `committed`, `deferred`, `shaping`, `shipped`, `killed`), then `admitted_at`
   ascending, then `id`; 5 no-gos by `id`; all warnings ordered by code
-  declaration order, then subject, then detail. Drops are recorded in
-  `truncation.applied` / `truncation.omitted_counts`. Identical inputs under
-  `--as-of` produce identical output.
+  declaration order, then subject, then detail. The bounds are applied before
+  `review_due` and the warnings are computed, so both cover the retained bets
+  only and no warning names a dropped bet. Drops are recorded in
+  `truncation.applied` / `truncation.omitted_counts`, which count bets and
+  no-gos; the brief's parked omissions stay in the brief's own truncation.
+  Identical inputs under `--as-of` produce identical output.
 - **Agent surface** — the lens renders enums and constraints, no pitch prose and
   no `later` items as actionable text. The `podras init` AGENTS.md managed block
   gains two lines so drift checking covers them: "Roadmap
@@ -134,9 +147,11 @@ Out of scope for this change:
   the `roadmap-v1` spec.
 - Runtime surface: `podras roadmap [--json] [--as-of <date>] [--write]`; the
   brief gains the optional `roadmap{}` object and no new flag. Exit codes stay
-  consistent: `0` success including roadmap warnings, `2` CLI usage errors
-  (bad `--as-of`), `1` hard errors (`roadmap_missing`, `roadmap_parse_error`,
-  `roadmap_invalid`, unresolved write).
+  consistent: `0` success including roadmap warnings and a degraded brief lens
+  (state-file defect warned, object omitted), `2` CLI usage errors (bad
+  `--as-of`), and `1` hard errors from `podras roadmap` (`roadmap_missing`,
+  `roadmap_parse_error`, `roadmap_invalid`, `roadmap_unreadable`) plus an
+  unresolved write.
 - Privacy: `.podras/roadmap.toml` is human-authored state, so the lens carries
   no whisper-derived content and the committed `ROADMAP.*` renders inherit the
   brief's existing gating untouched.

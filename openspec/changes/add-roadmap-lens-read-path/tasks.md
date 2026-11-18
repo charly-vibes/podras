@@ -6,7 +6,8 @@ scenario ids; each contract's cargo filter is the scenario id. All items
 in sections 0–3 are delivered: `cargo test`, `cargo fmt --check`,
 `cargo clippy -D warnings`, `ah check --changes add-roadmap-lens-read-path
 --run-tests` (27 passed), `openspec validate --strict`, and `spk lint` are
-green. Section 4 stays out of scope for this change.
+green. Section 4 stays out of scope for this change; section 5 records the
+Rule-of-5 review fixes and re-runs those gates at landing.
 
 ## 0. Change artifacts and gates
 
@@ -28,7 +29,7 @@ green. Section 4 stays out of scope for this change.
 
 - [x] 2.1 red: `src/roadmap/warnings.rs::roadmap_warnings_not_verdict` — a building bet past `appetite_weeks * 1.25`, a committed bet without an epic, a closed epic under an active bet, a 15-day-idle epic, a `now` bet with no open epic, a deferred bet with an open epic, a passed `review_or_kill`, and an identity without `next_review` each emit their code; `health.signals` stays v1; exit 0; no bytes change.
 - [x] 2.2 red: `src/roadmap/warnings.rs::no_go_violation_flags_only` — `auto-close` matches a bead titled `auto-close` but not `autoclose`; one candidate per no-go per bead with `subject = no_go.id` and `detail = "<bead> matched `<term>`"`; empty `match_terms` never fires; nothing is written.
-- [x] 2.3 red: `src/roadmap/warnings.rs::identity_staleness_never_fresh` — absent `next_review` ⇒ `unknown` + `identity_review_overdue` (subject `identity`) and never `fresh`; passed ⇒ `stale`; equal to the evaluation date ⇒ `fresh`.
+- [x] 2.3 red: `src/roadmap/warnings.rs::identity_staleness_never_fresh` — absent `next_review` ⇒ `unknown` + `identity_review_overdue` (subject `identity`) and never `fresh`; passed ⇒ `stale` and also the advisory (revised in 5.1); equal to the evaluation date ⇒ `fresh`.
 - [x] 2.4 `src/roadmap/warnings.rs`: `CIRCUIT_BREAKER_FACTOR: f64 = 1.25` documented as `roadmap.circuit_breaker_factor`; the nine predicates; whole-token matching over bead titles and labels; 14-day `bet_no_transition` window reused from `crate::health::links::SIGNAL_HORIZON_DAYS`; earliest outstanding review per source; warning sort by code, subject, detail.
 - [x] 2.5 `src/readers/beads.rs`: `IssueRecord { id, title, status, labels, updated_at, open }` and `read_records(repo) -> Vec<IssueRecord>` (best-effort: absent/unreadable ⇒ empty), `RawIssue.labels` with `#[serde(default)]`, `open = !matches!(status, Some("closed" | "done"))`. `BeadsSummary` and existing reader signatures unchanged.
 
@@ -36,8 +37,8 @@ green. Section 4 stays out of scope for this change.
 
 - [x] 3.1 red: `tests/roadmap.rs::lens_separate_from_now_lens` — a fixture with a curation focus and a `now` bet; roadmap rows and focus/parked rows are disjoint, no bet renders as focus and no focus entry renders as a bet, both commands exit 0.
 - [x] 3.2 red: `tests/roadmap.rs::roadmap_envelope_additive_bounded` — no file ⇒ no `roadmap` object; zero-bet file ⇒ present lens (`bets: []`) with identity row; 7 bets + 7 no-gos ⇒ exactly five of each in declared order with `truncation.applied = true` and `omitted_counts` naming bets/no_gos; `schema_version = "brief.v1"`; two runs at one `--as-of` identical apart from `generated_at`.
-- [x] 3.3 red: `tests/roadmap.rs::roadmap_read_only` — `podras roadmap --json --as-of` and `--write --as-of` twice each: payload equality after removing `generated_at`, `ROADMAP.json` renders differ only in `generated_at`, reads change no repository bytes, a corrupted file yields `roadmap_parse_error`/`roadmap_invalid` from both `podras brief` and `podras roadmap`, and two `podras init` runs are byte-identical with the two roadmap AGENTS.md lines present.
-- [x] 3.4 `src/roadmap.rs`: `assemble(&BriefInputs, &RoadmapFile, &[IssueRecord], NaiveDate) -> RoadmapView` (pure: no clock, filesystem, or env), status rank then `admitted_at` then `id`, no-go `id` order, bounds applied after sort, `review_due` as the earliest outstanding review per source, `attach(Brief, Option<RoadmapView>) -> Brief` setting `roadmap` and recomputing `source_hash`.
+- [x] 3.3 red: `tests/roadmap.rs::roadmap_read_only` — `podras roadmap --json --as-of` and `--write --as-of` twice each: payload equality after removing `generated_at`, `ROADMAP.json` renders differ only in `generated_at`, reads change no repository bytes, a corrupted file yields `roadmap_parse_error`/`roadmap_invalid` from `podras roadmap` while `podras brief` omits `roadmap` and appends one warning (revised in 5.3), and two `podras init` runs are byte-identical with the two roadmap AGENTS.md lines present.
+- [x] 3.4 `src/roadmap.rs`: `assemble(&BriefInputs, &RoadmapFile, &[IssueRecord], NaiveDate) -> RoadmapView` (pure: no clock, filesystem, or env; the unused `BriefInputs` argument is dropped in 5.2), status rank then `admitted_at` then `id`, no-go `id` order, bounds applied after sort, `review_due` as the earliest outstanding review per source, `attach(Brief, Option<RoadmapView>) -> Brief` setting `roadmap` and recomputing `source_hash`.
 - [x] 3.5 `src/commands.rs` + `src/main.rs` + `src/render/roadmap.rs` + `src/write.rs`: `podras roadmap [--json] [--as-of <date>] [--write]` reusing the brief read path and envelope; `roadmap_missing` when the verb runs alone without the file; human narrative renders enums and constraints with explicit `none` lines; `write_roadmap_renders_to` emits `ROADMAP.md` / `ROADMAP.json` with the brief's generated-artifact semantics.
 - [x] 3.6 Docs: README documents `podras roadmap`, the state file's human ownership, and the advisory-only warning rule; `src/verbs/init.rs` managed block gains exactly the two decision-25 lines and a second `podras init` stays byte-identical.
 
@@ -47,6 +48,23 @@ green. Section 4 stays out of scope for this change.
 - [ ] 4.2 (stage ⑧) Harvest extension: `identity_review` when `next_review` passes, `retire_or_reshape` as a candidate row, never a mutation. Scenario: —.
 - [ ] 4.3 A second parked list, or any roadmap-side copy of curation's parked entries. Scenario: —.
 - [ ] 4.4 Brief narrative change, new `SignalKind` variants, `schema_version` bump, portfolio/org renders, per-repo roadmap thresholds. Scenario: —.
+
+## 5. Rule-of-5 review fixes
+
+A Rule-of-5 review of commit `7d8c12c` produced fixes D1–D14, recorded in
+`design.md` under "Review fixes (Rule of 5)". Sections 0–3 above describe the
+change as first delivered; the items below amend it. Gate results for this
+section are re-run at landing and recorded in 5.9.
+
+- [x] 5.1 (podras-5y8) Semantics: `bet_epic_missing` covers `committed`, `building`, and `shipped` (D4); `horizon_epic_mismatch` only non-terminal bets (D5); `review_due` and every warning are computed after the 5/5 bounds over retained bets only (D6); `identity_review_overdue` also fires when `next_review` has passed, its detail naming which case (D7); no-go tokens accept Unicode alphanumerics plus `-`/`_` with U+2010..U+2015 and U+2212 normalized to `-` on both text and term (D8). Scenario: `roadmap_warnings_not_verdict`, `no_go_violation_flags_only`, `identity_staleness_never_fresh`.
+- [x] 5.2 (podras-5y8) Errors and signatures: a non-`NotFound` IO failure loading the state file is `Error::Domain { code: "roadmap_unreadable", … }` with a suggestion, not `Error::Io` (D9); `roadmap::assemble(&RoadmapFile, &[IssueRecord], NaiveDate)` and `write::write_roadmap_renders_to(&Path, &Brief)` drop their unused parameters (D10, D11); `src/roadmap.rs` re-exports only `load`, `RoadmapFile`, `ROADMAP_REL_PATH` and the file structs drop `JsonSchema` (D12); `brief::sort_warnings_in_place` delegates to a `pub(crate)` `ordering::sort_warnings` with the key unchanged (D13). Scenario: `roadmap_read_only`.
+- [x] 5.3 (podras-5y8) CLI degradation: `podras brief` omits `roadmap`, appends exactly one `SourceName::Curation` warning (`code` = the domain code or `roadmap_unreadable`, `detail` prefixed `roadmap: `), keeps the five `sources[]` rows, and exits 0 on a malformed or unreadable file; `podras roadmap` keeps the hard domain error (D1, D2). Scenario: `roadmap_read_only`.
+- [x] 5.4 (podras-5y8) Lens parked column: `ROADMAP.md`'s "Not now (parked)" renders curation parked bullets first, then `needs_retriage` entries as `- <id> — <title or none> (needs re-triage: resurface trigger expired)`; the parked omission marker is unchanged (D3). Scenario: `lens_separate_from_now_lens`.
+- [x] 5.5 (podras-5y8) Specs: D1–D8 are stated in the deployed `roadmap-v1` spec and the delta; their requirement and scenario sections are byte-identical and every requirement paragraph is at most 500 characters, with constraints and scenarios carrying the detail. Scenario: all eight.
+- [x] 5.6 (podras-5y8) Tests: the eight contracts' tests cover the amended semantics, including brief degradation and the parked `needs_retriage` line. Scenario: all eight.
+- [x] 5.7 (podras-5y8) Docs: README gains the "Roadmap state" section (example `.podras/roadmap.toml`, `ROADMAP.md` lens-only versus `ROADMAP.json` full envelope) and the `roadmap_missing` suggestion points at `README.md#roadmap-state` (D14). Scenario: —.
+- [ ] 5.8 (gate) Archive-duplication check: `openspec archive` on the landed change reported `Specs already in sync; no files changed` (measured false positive: no duplication or dropped text, so no fix was made); re-check it after landing. Scenario: `corpus_self_lint`.
+- [ ] 5.9 (gate) Re-run after every section-5 edit: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test`, `ah check`, `ah check --changes add-roadmap-lens-read-path --run-tests`, `openspec validate --strict` (change and specs), `spk lint openspec/specs`; record the test count here. Scenario: all eight.
 
 ## Scenario coverage ledger
 

@@ -23,8 +23,11 @@ use crate::roadmap::file::ROADMAP_REL_PATH;
 /// Render the brief for the repository.
 ///
 /// Degraded sources are values, not failures: every source (present, missing,
-/// or unreadable) still produces a row and the command exits 0. Only a write
-/// failure or an unusable render is a hard error.
+/// or unreadable) still produces a row and the command exits 0. The roadmap
+/// lens degrades the same way: a malformed or unreadable `.podras/roadmap.toml`
+/// omits the `roadmap` object, appends one curation warning naming the load
+/// failure, and still exits 0. Only a write failure or an unusable render is a
+/// hard error.
 ///
 /// Output: the narrative by default, the envelope with `--json`; `--write`
 /// commits both artifacts into `out_dir` (the repository root unless supplied)
@@ -38,7 +41,7 @@ pub fn brief(
     out_dir: Option<&Path>,
 ) -> Result<()> {
     let inputs = readers::collect(&read_context(repo, as_of))?;
-    let brief = assemble_with_roadmap(repo, &inputs)?;
+    let brief = assemble_with_roadmap(repo, &inputs);
     let reentry = inputs
         .whisper
         .as_ref()
@@ -50,8 +53,9 @@ pub fn brief(
 ///
 /// The lens is read-only and additive: `.podras/roadmap.toml` is never
 /// scaffolded or written here, and a malformed file is a hard domain error
-/// rather than a degraded source. Candidates and review dates are rendered,
-/// never inferred; no verb admits, defers, or kills a bet.
+/// rather than a degraded source — `podras brief` is the command that degrades
+/// and warns instead. Candidates and review dates are rendered, never
+/// inferred; no verb admits, defers, or kills a bet.
 pub fn roadmap(
     repo: &Path,
     json: bool,
@@ -59,25 +63,27 @@ pub fn roadmap(
     as_of: Option<NaiveDate>,
     out_dir: Option<&Path>,
 ) -> Result<()> {
-    let inputs = readers::collect(&read_context(repo, as_of))?;
+    // The file is read before any source collection: a missing or malformed
+    // roadmap is reported without paying for a full read pass.
     let Some(file) = crate::roadmap::file::load(repo)? else {
         return Err(Error::Domain {
             code: "roadmap_missing",
             message: format!("no {ROADMAP_REL_PATH} for this repository"),
             suggestion: Some(
-                "create .podras/roadmap.toml with the [identity], [[bets]] and [[no_gos]] tables described in docs/design.md decision 17"
+                "create .podras/roadmap.toml with the [identity], [[bets]] and [[no_gos]] tables described in README.md#roadmap-state"
                     .into(),
             ),
         });
     };
+    let inputs = readers::collect(&read_context(repo, as_of))?;
     let evaluation = inputs.as_of.unwrap_or(inputs.now);
     let records = crate::readers::beads::read_records(repo);
-    let view = crate::roadmap::assemble(&inputs, &file, &records, evaluation);
+    let view = crate::roadmap::assemble(&file, &records, evaluation);
     let brief = crate::roadmap::attach(crate::brief::assemble(&inputs), Some(view));
 
     let target = out_dir.unwrap_or(repo);
     if write {
-        crate::write::write_roadmap_renders_to(repo, target, &brief)?;
+        crate::write::write_roadmap_renders_to(target, &brief)?;
     }
     if json {
         return print_envelope(&brief);
@@ -94,22 +100,47 @@ pub fn roadmap(
     Ok(())
 }
 
-/// Assemble the brief, attaching the roadmap lens when its file exists.
+/// Assemble the brief, attaching the roadmap lens when its file loads.
 ///
 /// An absent file means the brief carries no `roadmap` object at all; a
-/// present file, even one with zero bets, is a present lens. A malformed file
-/// propagates the loader's domain error, so the lens never silently disappears.
-fn assemble_with_roadmap(repo: &Path, inputs: &crate::brief::BriefInputs) -> Result<Brief> {
-    let Some(file) = crate::roadmap::file::load(repo)? else {
-        return Ok(crate::brief::assemble(inputs));
+/// present file, even one with zero bets, is a present lens. A file that fails
+/// to load never fails the brief: the lens is omitted and exactly one curation
+/// warning records why, so the command keeps its "degraded sources are values"
+/// contract. `podras roadmap` is the verb where a broken file stays a hard
+/// error.
+fn assemble_with_roadmap(repo: &Path, inputs: &crate::brief::BriefInputs) -> Brief {
+    let file = match crate::roadmap::file::load(repo) {
+        Ok(Some(file)) => file,
+        Ok(None) => return crate::brief::assemble(inputs),
+        Err(error) => {
+            let mut brief = crate::brief::assemble(inputs);
+            brief.warnings.push(roadmap_load_warning(&error));
+            crate::brief::sort_warnings_in_place(&mut brief.warnings);
+            return crate::roadmap::attach(brief, None);
+        }
     };
     let evaluation = inputs.as_of.unwrap_or(inputs.now);
     let records = crate::readers::beads::read_records(repo);
-    let view = crate::roadmap::assemble(inputs, &file, &records, evaluation);
-    Ok(crate::roadmap::attach(
-        crate::brief::assemble(inputs),
-        Some(view),
-    ))
+    let view = crate::roadmap::assemble(&file, &records, evaluation);
+    crate::roadmap::attach(crate::brief::assemble(inputs), Some(view))
+}
+
+/// Describe a roadmap load failure as one curation warning.
+///
+/// A domain error contributes its own stable code; anything else (I/O and the
+/// errors `load` does not classify) is `roadmap_unreadable`. The detail keeps
+/// the loader's message verbatim behind a `roadmap:` prefix so the warning
+/// names the failing file and rule.
+fn roadmap_load_warning(error: &Error) -> crate::model::Warning {
+    let (code, message) = match error {
+        Error::Domain { code, message, .. } => (*code, message.clone()),
+        other => ("roadmap_unreadable", other.to_string()),
+    };
+    crate::model::Warning {
+        source: crate::model::SourceName::Curation,
+        code: code.to_string(),
+        detail: format!("roadmap: {message}"),
+    }
 }
 
 /// Emit the brief: envelope, write report, or narrative, in that precedence.

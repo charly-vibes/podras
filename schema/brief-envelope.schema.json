@@ -84,7 +84,7 @@
       }
     },
     "roadmap": {
-      "description": "Roadmap lens, present only when `.podras/roadmap.toml` exists.",
+      "description": "Roadmap lens, present only when `.podras/roadmap.toml` loads and\nvalidates; a malformed or unreadable file leaves it absent.",
       "anyOf": [
         {
           "$ref": "#/$defs/RoadmapView"
@@ -581,11 +581,11 @@
           "$ref": "#/$defs/ReviewDue"
         },
         "truncation": {
-          "description": "Declared truncation of the bounded lists.",
+          "description": "Declared truncation of `bets` and `no_gos`; parked omissions stay in the\nbrief's own `truncation`.",
           "$ref": "#/$defs/Truncation"
         },
         "warnings": {
-          "description": "All advisory warnings, never truncated.",
+          "description": "Advisory warnings over the retained bets and no-gos; never truncated,\nand never naming an entry the bounds dropped.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/RoadmapWarning"
@@ -638,7 +638,7 @@
           "const": "circuit_breaker_due"
         },
         {
-          "description": "A committed bet has no tracker epic.",
+          "description": "A committed, building, or shipped bet has no tracker epic.",
           "type": "string",
           "const": "bet_epic_missing"
         },
@@ -653,7 +653,7 @@
           "const": "bet_no_transition"
         },
         {
-          "description": "The declared horizon contradicts the epic's state.",
+          "description": "A non-terminal bet's horizon contradicts the epic's state.",
           "type": "string",
           "const": "horizon_epic_mismatch"
         },
@@ -663,7 +663,7 @@
           "const": "no_go_violation_candidate"
         },
         {
-          "description": "Identity declares no next review, so staleness is unknown.",
+          "description": "Identity's next review is absent or has passed.",
           "type": "string",
           "const": "identity_review_overdue"
         },

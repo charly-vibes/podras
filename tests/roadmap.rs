@@ -7,6 +7,10 @@
 //! - assert closed lifecycle enums, identity staleness rules, and no-go
 //!   whole-token matching including the negative cases;
 //! - assert warnings stay advisories in `roadmap.warnings`, never health;
+//! - assert a broken state file degrades the brief with one curation warning
+//!   while the lens verb keeps its hard domain error;
+//! - assert the written pair's scope: `ROADMAP.md` is lens-only while
+//!   `ROADMAP.json` carries the full brief envelope;
 //! - assert the additive, bounded, deterministically ordered envelope;
 //! - assert every read verb is byte-for-byte side-effect free.
 //!
@@ -20,12 +24,13 @@ mod common;
 mod fixtures;
 
 use fixtures::{
-    AS_OF, BET_ID, BeadRow, BetSpec, CLOSED_EPIC_ID, CURATION, EPIC_ID, FOCUS_ID, IDLE_EPIC_ID,
-    NO_GO_ID, PARKED_ID, TempRepo, array_ids, assert_section, brief_data, empty_roadmap,
-    error_code, fixture_with_identity, fixture_with_roadmap, full_fixture, headings, identity,
-    load_text, no_go, object_keys, review_no_go, roadmap_data, roadmap_envelope, roadmap_file,
-    roadmap_narrative, section, seed_epic_states, seed_full, seven_bets_roadmap, stdout, view,
-    warning_codes, warning_text, warnings_roadmap,
+    AS_OF, BET_ID, BeadRow, BetSpec, CLOSED_EPIC_ID, CURATION, EPIC_ID, EXPIRED_ID, FOCUS_ID,
+    IDLE_EPIC_ID, NO_GO_ID, PARKED_ID, TempRepo, array_ids, assert_section, brief_data,
+    brief_envelope, empty_roadmap, error_code, expired_park_fixture, fixture_with_identity,
+    fixture_with_roadmap, full_fixture, headings, identity, load_text, no_go, object_keys,
+    review_no_go, review_passed_roadmap, roadmap_data, roadmap_envelope, roadmap_file,
+    roadmap_narrative, section, seed_epic_states, seed_full, seven_bets_roadmap, stdout,
+    terminal_bets_roadmap, view, warning_codes, warning_text, warnings_roadmap,
 };
 use podras::model::{
     BetStatus, Enforcement, Horizon, RoadmapWarningKind, SCHEMA_VERSION, Staleness,
@@ -68,6 +73,21 @@ fn warning<'a>(data: &'a Value, code: &str, subject: &str) -> &'a Value {
         .iter()
         .find(|warning| warning["code"] == code && warning["subject"] == subject)
         .unwrap_or_else(|| panic!("warning `{code}` for `{subject}` is present: {data}"))
+}
+
+/// The brief warnings that record a roadmap load failure.
+fn roadmap_load_warnings(data: &Value) -> Vec<&Value> {
+    data["warnings"]
+        .as_array()
+        .expect("the brief carries warnings")
+        .iter()
+        .filter(|warning| {
+            matches!(
+                warning["code"].as_str().unwrap_or_default(),
+                "roadmap_parse_error" | "roadmap_invalid" | "roadmap_unreadable"
+            )
+        })
+        .collect()
 }
 
 #[test]
@@ -198,6 +218,36 @@ fn lens_separate_from_now_lens() {
         "- {NO_GO_ID} — podras never mutates the tracker (scope: all verbs; enforcement: automated; revoke by: a new design decision)"
     );
     assert_section(&lens, "Boundaries (no-gos)", &[boundary.as_str()]);
+
+    // Parked state reaches the lens without a second list: the curation parked
+    // bullet renders first, then the expired resurface trigger taken from the
+    // brief's `needs_retriage` queue, with its tracker title or `none`.
+    for (title, rendered_title) in [(Some("Harvest v1.1b"), "Harvest v1.1b"), (None, "none")] {
+        let expired = expired_park_fixture(title);
+        let data = brief_data(&expired);
+        assert_eq!(
+            array_ids(&data["parked"]),
+            vec![PARKED_ID.to_string()],
+            "an expired trigger leaves the parked queue: {data}"
+        );
+        assert_eq!(
+            array_ids(&data["needs_retriage"]),
+            vec![EXPIRED_ID.to_string()],
+            "an expired trigger enters needs_retriage: {data}"
+        );
+        let lens = roadmap_narrative(&expired);
+        let triage = format!(
+            "- {EXPIRED_ID} — {rendered_title} (needs re-triage: resurface trigger expired)"
+        );
+        assert_section(
+            &lens,
+            "Not now (parked)",
+            &[
+                "- podras-f — harvest moves to v1.1 (parked: 2026-11-10; confirmed: 2026-11-10; resurface: 2027-01-01)",
+                triage.as_str(),
+            ],
+        );
+    }
 }
 
 #[test]
@@ -505,6 +555,18 @@ fn identity_staleness_never_fresh() {
     );
     assert!(data["roadmap"]["review_due"]["identity"].is_null());
     assert_eq!(warning_codes(&data), vec!["identity_review_overdue"]);
+    let missing_schedule = warning(&data, "identity_review_overdue", "identity");
+    let detail = missing_schedule["detail"]
+        .as_str()
+        .expect("the advisory carries detail");
+    assert!(
+        detail.contains("no next_review declared"),
+        "the detail names the missing schedule: {detail}"
+    );
+    assert!(
+        !detail.contains("passed"),
+        "an absent schedule must not read as a passed one: {detail}"
+    );
     assert_eq!(view(&unscheduled).identity.staleness, Staleness::Unknown);
 
     let narrative = roadmap_narrative(&unscheduled);
@@ -532,19 +594,46 @@ fn identity_staleness_never_fresh() {
         "the advisory explains the missing schedule: {warnings}"
     );
 
-    // Passed next_review: stale, and the date stays the declared review date.
+    // Passed next_review: stale, the declared date stays the review date, and
+    // the advisory names the date it passed on.
     let passed = fixture_with_identity(Some("2026-10-01"));
     let data = roadmap_data(&passed);
     assert_eq!(data["roadmap"]["identity"]["staleness"], "stale");
     assert_eq!(data["roadmap"]["review_due"]["identity"], "2026-10-01");
+    assert_eq!(
+        warning_codes(&data),
+        vec!["identity_review_overdue"],
+        "a passed review is an advisory, never a silent stale: {data}"
+    );
+    let overdue = warning(&data, "identity_review_overdue", "identity");
+    let detail = overdue["detail"]
+        .as_str()
+        .expect("the advisory carries detail");
     assert!(
-        warning_codes(&data).is_empty(),
-        "an overdue identity is stale, not an advisory replay: {data}"
+        detail.contains("next_review passed on 2026-10-01"),
+        "the detail names the passed date: {detail}"
+    );
+    assert!(
+        !detail.contains("no next_review declared"),
+        "a declared-but-passed review is not an absent one: {detail}"
     );
     assert_eq!(view(&passed).identity.staleness, Staleness::Stale);
+    let narrative = roadmap_narrative(&passed);
     assert!(
-        section(&roadmap_narrative(&passed), "Identity").contains("- staleness: stale"),
+        section(&narrative, "Identity").contains("- staleness: stale"),
         "the narrative states the stale verdict"
+    );
+    let advisory = section(&narrative, "Warnings");
+    assert!(
+        advisory
+            .lines()
+            .next()
+            .is_some_and(|line| line.starts_with("- identity_review_overdue — identity — ")),
+        "the narrative renders the same advisory: {advisory}"
+    );
+    assert!(
+        advisory.contains("2026-10-01"),
+        "the narrative names the passed date: {advisory}"
     );
 
     // Equal or future next_review: fresh, decided by the pinned date alone.
@@ -567,11 +656,46 @@ fn identity_staleness_never_fresh() {
 
 #[test]
 fn no_go_violation_flags_only() {
+    // Whole-token matching is Unicode-aware: typographic hyphens normalize on
+    // both sides, a non-ASCII letter is still a token character, and `_` binds
+    // just like a hyphen.
+    let hyphen = "auto\u{2011}close";
+    let minus = "auto\u{2212}close";
+    let hyphen_title = "Ship auto\u{2011}close, always";
+    let minus_title = "Ship auto\u{2212}close, always";
     let repo = TempRepo::new();
     repo.beads_jsonl_rows(&[
         BeadRow {
             id: "podras-close",
             title: "Ship auto-close on merge",
+            status: "open",
+            labels: &[],
+            updated_at: "2026-11-10T00:00:00Z",
+        },
+        BeadRow {
+            id: "podras-hyphen",
+            title: hyphen_title,
+            status: "open",
+            labels: &[],
+            updated_at: "2026-11-10T00:00:00Z",
+        },
+        BeadRow {
+            id: "podras-minus",
+            title: minus_title,
+            status: "open",
+            labels: &[],
+            updated_at: "2026-11-10T00:00:00Z",
+        },
+        BeadRow {
+            id: "podras-eacute",
+            title: "éauto-close ships",
+            status: "open",
+            labels: &[],
+            updated_at: "2026-11-10T00:00:00Z",
+        },
+        BeadRow {
+            id: "podras-underscore",
+            title: "x_auto-close runs",
             status: "open",
             labels: &[],
             updated_at: "2026-11-10T00:00:00Z",
@@ -636,29 +760,40 @@ fn no_go_violation_flags_only() {
         .as_array()
         .expect("warnings array");
     assert_eq!(
-        warnings.len(),
-        2,
-        "exactly two candidates fire; empty terms and near-tokens stay silent: {data}"
-    );
-    assert_eq!(
         warning_codes(&data),
-        vec!["no_go_violation_candidate".to_string(); 2]
+        vec!["no_go_violation_candidate".to_string(); 4],
+        "three whole-token matches and one label match fire; empty terms and near-tokens stay silent: {data}"
     );
 
-    // Provenance: the no-go id and the offending bead both appear.
-    let title_case = warning(&data, "no_go_violation_candidate", "no-auto-close");
+    // Provenance: the no-go id and the offending bead both appear, including
+    // for text whose hyphen was copied from prose.
+    let close_flags: Vec<&Value> = warnings
+        .iter()
+        .filter(|warning| warning["subject"] == "no-auto-close")
+        .collect();
+    assert_eq!(close_flags.len(), 3, "one flag per matching bead: {data}");
+    for bead in ["podras-close", "podras-hyphen", "podras-minus"] {
+        assert!(
+            close_flags
+                .iter()
+                .any(|flag| warning_text(flag).contains(bead)),
+            "the whole-token match names `{bead}`: {close_flags:?}"
+        );
+    }
     assert!(
-        warning_text(title_case).contains("podras-close"),
-        "the title match names its bead: {title_case}"
-    );
-    assert!(
-        warning_text(title_case).contains("`auto-close`"),
-        "the match names the term: {title_case}"
+        close_flags
+            .iter()
+            .any(|flag| warning_text(flag).contains("`auto-close`")),
+        "the match quotes the declared term: {close_flags:?}"
     );
     let label_case = warning(&data, "no_go_violation_candidate", "no-auto-promote");
     assert!(
         warning_text(label_case).contains("podras-label"),
         "the label match names its bead: {label_case}"
+    );
+    assert!(
+        warning_text(label_case).contains("`auto-promote`"),
+        "the label match quotes the term: {label_case}"
     );
 
     let joined = warnings
@@ -667,6 +802,8 @@ fn no_go_violation_flags_only() {
         .collect::<Vec<_>>()
         .join(" | ");
     for never in [
+        "podras-eacute",
+        "podras-underscore",
         "podras-autoclose",
         "podras-suffix",
         "podras-scope",
@@ -680,12 +817,45 @@ fn no_go_violation_flags_only() {
 
     // The type is closed too: only the violation kind fired.
     let view = view(&repo);
-    assert_eq!(view.warnings.len(), 2);
+    assert_eq!(view.warnings.len(), 4);
     for warning in &view.warnings {
         assert!(matches!(
             warning.code,
             RoadmapWarningKind::NoGoViolationCandidate
         ));
+    }
+
+    // A match term copied with a typographic hyphen matches ASCII prose too:
+    // both the text and the term normalize before the whole-token search.
+    let typed_term = TempRepo::new();
+    typed_term.beads_jsonl_rows(&[BeadRow {
+        id: "podras-close",
+        title: "Ship auto-close on merge",
+        status: "open",
+        labels: &[],
+        updated_at: "2026-11-10T00:00:00Z",
+    }]);
+    typed_term.roadmap(&roadmap_file(
+        &identity(Some("2027-05-18")),
+        &[],
+        &[
+            review_no_go("no-hyphen-term", "never auto-close issues", &[hyphen]),
+            review_no_go("no-minus-term", "never auto-close issues", &[minus]),
+        ],
+    ));
+    typed_term.commit("typographic term fixture");
+    let data = roadmap_data(&typed_term);
+    assert_eq!(
+        warning_codes(&data),
+        vec!["no_go_violation_candidate".to_string(); 2],
+        "a typographic term still matches ASCII prose: {data}"
+    );
+    for subject in ["no-hyphen-term", "no-minus-term"] {
+        let flag = warning(&data, "no_go_violation_candidate", subject);
+        assert!(
+            warning_text(flag).contains("podras-close"),
+            "`{subject}` names the ASCII bead: {flag}"
+        );
     }
 
     // An open bead with an empty-term no-go and a closed matching bead both
@@ -843,6 +1013,47 @@ fn roadmap_warnings_not_verdict() {
 
     // Exit code is always zero, narrative and envelope.
     stdout(&with_lens, &["roadmap", "--as-of", AS_OF]);
+
+    // Terminal bets never fire `horizon_epic_mismatch`, even with a closed
+    // epic under `later`; only `committed`, `building`, and `shipped` bets owe
+    // an epic, and `killed` is exempt.
+    let terminal = TempRepo::new();
+    seed_epic_states(&terminal);
+    terminal.curation(CURATION);
+    terminal.roadmap(&terminal_bets_roadmap());
+    terminal.commit("terminal bets lens");
+
+    let data = roadmap_data(&terminal);
+    assert_eq!(
+        warning_codes(&data),
+        vec![
+            "bet_epic_missing".to_string(),
+            "bet_epic_missing".to_string(),
+            "horizon_epic_mismatch".to_string(),
+        ],
+        "only the two epic-less non-killed statuses and the non-terminal deferral warn: {data}"
+    );
+    let subjects: Vec<&str> = data["roadmap"]["warnings"]
+        .as_array()
+        .expect("warnings array")
+        .iter()
+        .map(|warning| warning["subject"].as_str().expect("warning subject"))
+        .collect();
+    assert_eq!(
+        subjects,
+        vec!["building-no-epic", "shipped-no-epic", "deferred-closed"],
+        "epic scope is status-driven: {data}"
+    );
+    assert_eq!(
+        data["roadmap"]["truncation"]["applied"], false,
+        "the terminal fixture fits the bound, so every bet stays visible: {data}"
+    );
+    for quiet in ["shipped-closed", "killed-closed"] {
+        assert!(
+            !subjects.contains(&quiet),
+            "`{quiet}` is terminal, so it warns about neither horizon nor epic: {data}"
+        );
+    }
 }
 
 #[test]
@@ -923,6 +1134,16 @@ fn roadmap_envelope_additive_bounded() {
         Some(2)
     );
 
+    // A dropped bet never reaches the warning list, even when its status would
+    // otherwise owe an epic: `bet-ship` is a shipped, epic-less bet cut by the
+    // bound, so no reader is asked to act on a bet the lens cannot show.
+    assert!(
+        !with_data["roadmap"]["warnings"]
+            .to_string()
+            .contains("bet-ship"),
+        "no warning names a bet dropped by the bound: {with_data}"
+    );
+
     // The dropped bets are the lowest-ranked ones and are not rendered.
     let lens = roadmap_narrative(&with_lens);
     assert_eq!(headings(&lens), HEADINGS.to_vec());
@@ -958,6 +1179,61 @@ fn roadmap_envelope_additive_bounded() {
         next.find("- bet-commit — ").expect("commit renders")
             < next.find("- shape-a — ").expect("shape-a renders"),
         "rank order precedes admission order: {next}"
+    );
+
+    // Truncation precedes warnings: with seven bets whose review dates all
+    // passed, the two dropped bets never appear as a warning subject and never
+    // pull `review_due` earlier than the retained set allows.
+    let truncated = TempRepo::new();
+    seed_full(&truncated);
+    truncated.curation(CURATION);
+    truncated.roadmap(&review_passed_roadmap());
+    truncated.commit("seven overdue reviews");
+
+    let data = roadmap_data(&truncated);
+    let retained: Vec<String> = ["bet-01", "bet-02", "bet-03", "bet-04", "bet-05"]
+        .iter()
+        .map(|id| id.to_string())
+        .collect();
+    assert_eq!(array_ids(&data["roadmap"]["bets"]), retained);
+    assert_eq!(data["roadmap"]["truncation"]["applied"], true);
+    assert_eq!(
+        data["roadmap"]["truncation"]["omitted_counts"]["bets"], 2,
+        "the two lowest-ranked bets are dropped: {data}"
+    );
+    assert_eq!(
+        data["roadmap"]["review_due"]["roadmap"], "2026-10-10",
+        "the earliest review among retained bets, never the dropped `bet-06` date: {data}"
+    );
+    assert_eq!(
+        warning_codes(&data),
+        vec!["roadmap_review_overdue".to_string(); 5],
+        "one overdue advisory per retained active bet: {data}"
+    );
+    let warned: Vec<String> = data["roadmap"]["warnings"]
+        .as_array()
+        .expect("warnings array")
+        .iter()
+        .map(|warning| {
+            warning["subject"]
+                .as_str()
+                .expect("warning subject")
+                .to_string()
+        })
+        .collect();
+    assert_eq!(
+        warned, retained,
+        "every warning subject is visible in `bets`"
+    );
+    for dropped in ["bet-06", "bet-07"] {
+        assert!(
+            !warned.iter().any(|subject| subject == dropped),
+            "`{dropped}` was dropped by the bound, so no warning may name it: {data}"
+        );
+    }
+    assert!(
+        warning_text(warning(&data, "roadmap_review_overdue", "bet-01")).contains("2026-10-10"),
+        "each advisory names its own declared review date"
     );
 }
 
@@ -1033,6 +1309,65 @@ fn roadmap_read_only() {
         "the written envelope carries the same lens"
     );
 
+    // The pair states its scope: ROADMAP.md is lens-only, while ROADMAP.json is
+    // the full brief envelope an agent can read without the brief command.
+    assert_eq!(
+        headings(&markdown),
+        HEADINGS.to_vec(),
+        "ROADMAP.md carries exactly the lens sections: {markdown}"
+    );
+    for brief_heading in [
+        "Focus",
+        "In flight",
+        "Blocked / waiting",
+        "Next / ready",
+        "Recent",
+        "Health + confidence",
+    ] {
+        assert!(
+            !markdown.contains(&format!("## {brief_heading}\n")),
+            "ROADMAP.md never carries the brief section `{brief_heading}`: {markdown}"
+        );
+    }
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["envelope_kind"], "ok");
+    assert_eq!(
+        json["warnings"].as_array().map(Vec::len),
+        Some(0),
+        "the genesis wrapper carries no warnings; they live inside the brief: {json}"
+    );
+    for key in [
+        "schema_version",
+        "as_of",
+        "generated_at",
+        "sources",
+        "curation",
+        "purpose_lite",
+        "focus",
+        "in_flight",
+        "blocked",
+        "next",
+        "parked",
+        "needs_retriage",
+        "recent",
+        "health",
+        "truncation",
+        "head_sha",
+        "source_hash",
+        "warnings",
+        "roadmap",
+    ] {
+        assert!(
+            json["data"].get(key).is_some(),
+            "ROADMAP.json is the full brief envelope; `{key}` is missing: {json}"
+        );
+    }
+    assert_eq!(
+        json["data"]["roadmap"],
+        roadmap_data(&repo)["roadmap"],
+        "the written JSON carries the same lens as `roadmap --json`"
+    );
+
     // --write in the repository root adds exactly the pair and rewrites
     // nothing else.
     let printed = stdout(&repo, &["roadmap", "--write", "--as-of", AS_OF]);
@@ -1062,4 +1397,121 @@ fn roadmap_read_only() {
             "`{path}` keeps its exact bytes across every lens verb"
         );
     }
+
+    // A corrupted state file degrades the brief and never the lens verb: the
+    // brief omits `roadmap`, appends one curation-sourced warning carrying the
+    // domain code, and exits 0.
+    let malformed = TempRepo::new();
+    seed_full(&malformed);
+    malformed.curation(CURATION);
+    malformed.roadmap("[[bets]\nid = \"x\"\n");
+    malformed.commit("malformed roadmap");
+
+    let envelope = brief_envelope(&malformed);
+    assert_eq!(
+        envelope["ok"], true,
+        "a broken lens never fails the brief: {envelope}"
+    );
+    assert!(
+        envelope["data"].get("roadmap").is_none(),
+        "the degraded brief omits the object entirely: {envelope}"
+    );
+    let broken = roadmap_load_warnings(&envelope["data"]);
+    assert_eq!(
+        broken.len(),
+        1,
+        "exactly one warning records the broken file: {envelope}"
+    );
+    assert_eq!(broken[0]["source"], "curation");
+    assert_eq!(broken[0]["code"], "roadmap_parse_error");
+    assert!(
+        broken[0]["detail"]
+            .as_str()
+            .expect("warning detail")
+            .starts_with("roadmap:"),
+        "the detail names the failing file behind a roadmap prefix: {envelope}"
+    );
+    let names: Vec<&str> = envelope["data"]["sources"]
+        .as_array()
+        .expect("sources array")
+        .iter()
+        .map(|source| source["name"].as_str().expect("source name"))
+        .collect();
+    assert_eq!(
+        names,
+        vec!["beads", "git", "openspec", "whisper", "curation"],
+        "degrading the lens invents no sixth source: {envelope}"
+    );
+    stdout(&malformed, &["brief", "--as-of", AS_OF]);
+    let failed =
+        fixtures::podras_in(&malformed, &["roadmap", "--json", "--as-of", AS_OF]).failure();
+    let stderr =
+        String::from_utf8(failed.get_output().stderr.clone()).expect("roadmap stderr is UTF-8");
+    assert!(
+        stderr.contains("roadmap_parse_error"),
+        "`podras roadmap` keeps the hard domain error: {stderr}"
+    );
+
+    // A semantic violation degrades the same way, with its own code.
+    malformed.roadmap(&roadmap_file(
+        &identity(Some("2027-05-18")),
+        &[BetSpec::new("Bad Slug", "Title", "shaping", "now").render()],
+        &[],
+    ));
+    let envelope = brief_envelope(&malformed);
+    assert_eq!(envelope["ok"], true);
+    assert!(envelope["data"].get("roadmap").is_none());
+    let broken = roadmap_load_warnings(&envelope["data"]);
+    assert_eq!(broken.len(), 1);
+    assert_eq!(broken[0]["code"], "roadmap_invalid");
+    assert!(
+        broken[0]["detail"]
+            .as_str()
+            .expect("warning detail")
+            .starts_with("roadmap:")
+    );
+    let failed =
+        fixtures::podras_in(&malformed, &["roadmap", "--json", "--as-of", AS_OF]).failure();
+    let stderr =
+        String::from_utf8(failed.get_output().stderr.clone()).expect("roadmap stderr is UTF-8");
+    assert!(
+        stderr.contains("roadmap_invalid"),
+        "`podras roadmap` reports the semantic code: {stderr}"
+    );
+
+    // Unreadable bytes are a domain error, not `Error::Io`: the operator sees a
+    // roadmap problem, and the brief still exits 0 with one warning.
+    let unreadable = TempRepo::new();
+    seed_full(&unreadable);
+    unreadable.curation(CURATION);
+    std::fs::create_dir_all(unreadable.root().join(".podras/roadmap.toml"))
+        .expect("create a directory where the state file belongs");
+    unreadable.commit("unreadable roadmap");
+
+    let error = load(unreadable.root()).expect_err("a directory is not a readable roadmap file");
+    assert_eq!(
+        error_code(&error),
+        Some("roadmap_unreadable"),
+        "non-NotFound IO becomes a roadmap domain error: {error}"
+    );
+    let envelope = brief_envelope(&unreadable);
+    assert_eq!(envelope["ok"], true);
+    assert!(envelope["data"].get("roadmap").is_none());
+    let broken = roadmap_load_warnings(&envelope["data"]);
+    assert_eq!(broken.len(), 1);
+    assert_eq!(broken[0]["code"], "roadmap_unreadable");
+    assert!(
+        broken[0]["detail"]
+            .as_str()
+            .expect("warning detail")
+            .starts_with("roadmap:")
+    );
+    let failed =
+        fixtures::podras_in(&unreadable, &["roadmap", "--json", "--as-of", AS_OF]).failure();
+    let stderr =
+        String::from_utf8(failed.get_output().stderr.clone()).expect("roadmap stderr is UTF-8");
+    assert!(
+        stderr.contains("roadmap_unreadable"),
+        "`podras roadmap` refuses an unreadable file: {stderr}"
+    );
 }

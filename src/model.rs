@@ -483,17 +483,17 @@ pub enum RoadmapWarningKind {
     BetAgeExceedsAppetite,
     /// An active bet passed 1.25x its appetite.
     CircuitBreakerDue,
-    /// A committed bet has no tracker epic.
+    /// A committed, building, or shipped bet has no tracker epic.
     BetEpicMissing,
     /// A bet is active while its epic is closed.
     BetEpicClosedNotRetired,
     /// A bet's epic has not changed in fourteen days.
     BetNoTransition,
-    /// The declared horizon contradicts the epic's state.
+    /// A non-terminal bet's horizon contradicts the epic's state.
     HorizonEpicMismatch,
     /// An open bead matches a no-go's terms.
     NoGoViolationCandidate,
-    /// Identity declares no next review, so staleness is unknown.
+    /// Identity's next review is absent or has passed.
     IdentityReviewOverdue,
     /// An active bet's `review_or_kill` date has passed.
     RoadmapReviewOverdue,
@@ -521,9 +521,11 @@ pub struct RoadmapView {
     pub no_gos: Vec<NoGoView>,
     /// Earliest outstanding review per source.
     pub review_due: ReviewDue,
-    /// All advisory warnings, never truncated.
+    /// Advisory warnings over the retained bets and no-gos; never truncated,
+    /// and never naming an entry the bounds dropped.
     pub warnings: Vec<RoadmapWarning>,
-    /// Declared truncation of the bounded lists.
+    /// Declared truncation of `bets` and `no_gos`; parked omissions stay in the
+    /// brief's own `truncation`.
     pub truncation: Truncation,
 }
 
@@ -568,7 +570,8 @@ pub struct Brief {
     pub source_hash: Option<String>,
     /// Stable per-source warnings; never truncated.
     pub warnings: Vec<Warning>,
-    /// Roadmap lens, present only when `.podras/roadmap.toml` exists.
+    /// Roadmap lens, present only when `.podras/roadmap.toml` loads and
+    /// validates; a malformed or unreadable file leaves it absent.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub roadmap: Option<RoadmapView>,
 }
