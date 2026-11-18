@@ -2,9 +2,10 @@
 
 Working design record until openspec proposals replace it. Sources: grill
 sessions 2026-11-17/18, catitas investigations `pm-status-tool-structure`
-and `value-prop-roadmap` (12-provider syntheses at
-`../catitas/catitas/data/synthesized/`), pinky ledger topics
-`pm-status-tool-structure` and `value-prop-roadmap` (both synthesized).
+and `value-prop-roadmap` (12-provider syntheses, read via
+`~/cotorreo/synthesized/` → `ak/ryan/archive/catitas/data/synthesized/`),
+pinky ledger topics `pm-status-tool-structure` and `value-prop-roadmap`
+(both synthesized).
 
 ## Resolved decisions
 
@@ -71,32 +72,78 @@ and `value-prop-roadmap` (12-provider syntheses at
 ## Resolved decisions — roadmap lens (2026-11-18, ticket podras-5y8)
 
 Gate satisfied: catitas topic `value-prop-roadmap` synthesized 2026-11-18
-(12 providers, `../catitas/catitas/data/synthesized/value-prop-roadmap.md`).
+(12 providers, `~/cotorreo/synthesized/value-prop-roadmap.md`).
 The corpus resolves the three open structural questions; the lens is designed
 as a **separate render path**, not an extension of the now-lens.
 
 16. **Separation (WHO/WHY ≠ NOW)**: the roadmap lens renders identity + bets +
     boundaries; it never mixes them into focus/parked. `focus` remains curation
     intent; a *bet* is a commitment with appetite, outcome, and one tracker
-    epic. Neither is inferred from the other (corpus C6 + brief v1
-    `curation_beats_inference`).
+    epic. Neither is inferred from the other (corpus C1 + brief v1
+    `curation_beats_inference`). Deliberate deviation: the corpus's one
+    cross-cutting rendering rule (C6 — a constraint is shown only when it is
+    at risk) is **not** applied to v1's brief, which stays frozen; it lands in
+    v1.1 as a single line — a no-go renders in the brief's Health section only
+    when `no_go_violation_candidate` fires.
 17. **State file**: `.podras/roadmap.toml`, git-committed, sibling of
-    `curation.toml`, written by verbs/humans only. Three tables:
-    `[[bets]]` (`id`, `outcome`, `horizon`, `appetite_weeks`, `owner`,
-    `epic` — exactly one bead id, `status`, `admitted_at`, `last_reviewed`,
-    `review_or_kill`, optional `killed_reason`), `[[no_gos]]` (`id`, `reason`,
-    `scope`, `enforcement: automated|human_review`, `revoke_by`),
-    `[identity]` (`path`, `last_reviewed`, `next_review`).
+    `curation.toml`, written by verbs and humans only — **agents never edit
+    it** (same rule as curation, decision 11; enforced textually by the
+    AGENTS.md block, decision 25). Three tables, all dates ISO-8601
+    (`YYYY-MM-DD` or RFC 3339), all enums closed:
+    `[[bets]]` — `id` (slug, `^[a-z0-9][a-z0-9-]*$`, unique), `title`
+    (≤60 chars, imperative), `outcome`, `horizon`, `appetite_weeks`
+    (integer ≥ 1), `owner`, optional `epic` (exactly one bead id),
+    `status`, `admitted_at`, `last_reviewed`, `review_or_kill` (required for
+    `committed`/`building`), `revive_when` (required when `deferred`, else
+    absent), optional `killed_reason`.
+    `[[no_gos]]` — `id`, `reason`, `scope`, `enforcement`, `revoke_by`,
+    `match_terms` (list of strings; empty ⇒ `human_review` only).
+    `[identity]` — `path`, `last_reviewed`, optional `next_review`.
+    Enums: `horizon: now|next|later`;
+    `status: shaping|committed|building|deferred|shipped|killed`;
+    `enforcement: automated|human_review`.
+
+    ```toml
+    [identity]
+    path = "README.md#why"
+    last_reviewed = "2026-11-18"
+    next_review = "2027-05-18"
+
+    [[bets]]
+    id = "brief-v2"
+    title = "Ship the roadmap lens"
+    outcome = "A cold reader predicts the next bet from the lens alone"
+    horizon = "now"
+    appetite_weeks = 6
+    owner = "charly"
+    epic = "podras-abc"
+    status = "building"
+    admitted_at = "2026-11-18"
+    last_reviewed = "2026-11-18"
+    review_or_kill = "2026-12-30"
+
+    [[no_gos]]
+    id = "no-tracker-writes"
+    reason = "podras never mutates the tracker; harvest proposes only"
+    scope = "all verbs"
+    enforcement = "automated"
+    revoke_by = "never — requires a new design decision"
+    match_terms = ["auto-close", "auto-promote"]
+    ```
 18. **Parked stays in `curation.toml`** — no second parked list. The roadmap
     lens renders curation's parked entries as the "not now" column. Rationale:
     `park` already carries the mandatory resurface trigger (decision 11); a
     roadmap-side copy would be the exact duplication the corpus calls the
-    cardinal sin.
+    cardinal sin. The two objects are distinct: **task parking** is
+    curation-side (`podras park`, resurface trigger), **bet deferral** is
+    roadmap-side (`status = "deferred"` + `revive_when`, decision 22).
 19. **No-gos are first-class, never parked**: binding boundaries with a
     `reason` (the "because"), a declared enforcement tier (`automated` only
-    where a real check exists — qwen's CI lint is the sole corpus prior art;
-    everything else is honestly `human_review`), and `revoke_by`. Reversal is a
-    new decision record, never an edit (chatgpt's anti-history-erasure rule).
+    where a real check exists — qwen's CI lint is the corpus's only automated
+    enforcement example, while the `automated|human_review` tier vocabulary is
+    chatgpt's; everything else is honestly `human_review`), and `revoke_by`.
+    Reversal is a new decision record, never an edit (chatgpt's
+    anti-history-erasure rule).
 20. **Horizon is stored, then validated — not computed.** `horizon` is
     authoritative for rendering (determinism); harvest compares it against the
     linked epic's state and emits `horizon_epic_mismatch` when a `now` bet has
@@ -104,40 +151,72 @@ as a **separate render path**, not an extension of the now-lens.
     (kimi's computed horizon) because it infers commitment from observable
     work — the same inference brief v1 forbids for focus.
 21. **Identity is linked, never generated.** The lens renders
-    `identity.path`, `last_reviewed`, and staleness only. No verb rewrites
-    identity prose; harvest may emit an `identity_review` candidate when
-    `next_review` passes. "The code demonstrates what exists; it cannot
-    establish what the project ought to be" (chatgpt).
+    `identity.path`, `last_reviewed`, and staleness only. Staleness is decided
+    by `next_review` alone: absent `next_review` ⇒ `unknown` plus the
+    `identity_review_overdue` advisory (never `fresh` — the v1
+    `unknown_never_green` rule applies here too); present and passed ⇒
+    `stale`. No verb rewrites identity prose; harvest may emit an
+    `identity_review` candidate only when `next_review` passes. "The code
+    demonstrates what exists; it cannot establish what the project ought to
+    be" (chatgpt).
 22. **Bet lifecycle**: `shaping → committed → building → shipped`, plus
-    `killed` from any state. Only `committed`/`building`/`shipped` require an
-    `epic`. Admission (`shaping → committed`) is the dated decision event
-    harvest keys zombie detection on.
-23. **Roadmap health = named warnings, never a verdict.** New signal codes,
-    all amber-or-worse inputs to decision 13's layering, exit always 0:
-    `bet_age_exceeds_appetite` (elapsed > `appetite_weeks`, 1.25× escalates to
-    `circuit_breaker_due`), `bet_epic_missing` (committed without epic),
-    `bet_epic_closed_not_retired` (epic closed while bet active),
-    `bet_no_transition` (no epic update > 14d), `horizon_epic_mismatch`,
-    `no_go_violation_candidate` (harvest keyword/label match — advisory),
+    `deferred` (from `shaping`, `committed` or `building` — stopping mid-build
+    is a deferral, not a fifth state — requires `revive_when`) and
+    `killed` (from any state). Only `committed`/`building`/`shipped` require
+    an `epic`. Admission (`shaping → committed`) is the dated decision event
+    harvest keys zombie detection on; deferral is likewise a dated decision —
+    a shaped bet that is not selected moves to `deferred` (carrying its
+    trigger) or is `killed`, and never lingers as `shaping` (corpus C3:
+    parking without a trigger is a graveyard).
+23. **Roadmap health = named warnings, never a verdict.** They form a distinct
+    enum `RoadmapWarningKind` (serde `snake_case`), carried in
+    `roadmap.warnings`, never in `health.signals` — they are *not*
+    `SignalKind` variants. One exception is wired later: from v1.1 the brief's
+    Health section reads `no_go_violation_candidate` only (decision 16); every
+    other code stays lens-local and cannot change the brief's verdict. Codes,
+    all advisory, exit always 0:
+    `bet_age_exceeds_appetite` — `committed`/`building` bets only, elapsed >
+    `appetite_weeks`, and 1.25× (gemini; the corpus also proposes 1.5× and 2× —
+    constant lives in config `roadmap.circuit_breaker_factor`, default 1.25)
+    escalates to `circuit_breaker_due`;
+    `bet_epic_missing` (committed without epic), `bet_epic_closed_not_retired`
+    (epic closed while bet active), `bet_no_transition` (bead `updated_at`
+    older than 14d), `horizon_epic_mismatch`,
+    `no_go_violation_candidate` — matched by evaluating each no-go's
+    `match_terms` case-insensitively as whole tokens against the bead title and
+    labels; a no-go with empty `match_terms` never fires this code —,
     `identity_review_overdue`, `roadmap_review_overdue`. No auto-kill, no
     auto-promote: `retire_or_reshape` is a candidate row, not a mutation
     (same rule as `harvest` in decision 4).
 24. **Envelope is additive**: optional top-level `roadmap{}` —
     `identity{path, last_reviewed, staleness}`, `bets[]` (typed enums for
-    `horizon`/`status`), `no_gos[]`, `warnings[]`, `review_due`. Absence of the
-    object means the repo has no roadmap lens; `schema_version` stays 1
-    (additive-only within major, per corpus C3). Bounded: 5 bets, 5 no-gos,
-    all warnings; truncation recorded as in decision 8.
+    `horizon`/`status`), `no_gos[]`, `warnings[]` (each
+    `{code, subject, detail}`), `review_due{identity, roadmap}` (each a date
+    or `null` — the earliest outstanding review per source, never a
+    computed deadline). `schema_version` stays the
+    literal `"brief.v1"` (matching `SCHEMA_VERSION` in `src/model.rs` and the
+    published schema): the object is additive and no new required field is
+    introduced, so no major bump (additive-only-within-major — pm-status
+    synthesis, kimi). Semantics: no `.podras/roadmap.toml` ⇒ no `roadmap{}`
+    object at all; file present with zero bets is a **present** lens
+    (`bets: []`, identity row rendered) — the two cases must not collapse.
+    Bounded, with a deterministic order: 5 bets by status rank
+    (`building`, `committed`, `deferred`, `shaping`, `shipped`, `killed`) then
+    `admitted_at` ascending then `id`; 5 no-gos by `id`; all warnings.
+    Truncation recorded as in decision 8; identical inputs under `--as-of`
+    produce identical output.
 25. **Agent surface**: `roadmap` renders enums and constraints — no pitch
-    prose, and no "later" items as actionable text. AGENTS.md block (decision
-    14) gains one line: "Roadmap `later`/`shaping` items are not requirements;
-    no-gos are hard constraints."
+    prose, and no "later" items as actionable text. The AGENTS.md block
+    (decision 14, generated by `podras init` via genesis `managed_block`) gains
+    two lines, shipped with the lens so drift checking covers them: "Roadmap
+    `later`/`shaping`/`deferred` items are not requirements; no-gos are hard
+    constraints." and "Never edit `.podras/roadmap.toml`; admission, deferral
+    and kill are human decisions."
 26. **Build order**: lens ships after v1.1 as stage ⑥ read-only
     (`podras roadmap`, narrative + envelope + `--write`), then ⑦ curation verbs
-    (`bet add|admit|kill`); harvest extension in ⑧. Validation: cold-return
-    roadmap test (a stranger predicts the next bet from the lens alone) and
-    no-go discipline test (a candidate matching a no-go is flagged, nothing
-    is written).
+    (`bet add|admit|defer|kill`); harvest extension in ⑧. Validation: the three
+    roadmap experiments (cold-return, no-go discipline, determinism), listed in
+    §Validation experiments below.
 
 ## Brief v1 contract (from corpus consensus)
 
@@ -198,3 +277,15 @@ cold-start (fresh session, repo + AGENTS.md block + `brief --json`) ·
 staleness fault injection (close focus issue silently / kill tracker / edit
 spec post-harvest → brief must expose each, never manufacture a false
 narrative).
+
+Roadmap lens (stage ⑥–⑧):
+
+- **Cold-return roadmap test** — a stranger with only the lens output predicts
+  which bet is being worked now and which is next; wrong horizon or missing
+  boundary = fail.
+- **No-go discipline test** — a candidate whose title matches a no-go's
+  `match_terms` is flagged with provenance and nothing is written; a no-go with
+  empty `match_terms` never produces a false flag.
+- **Determinism test** — two runs over the same `roadmap.toml` under `--as-of`
+  produce byte-identical semantic output, including which five bets survived
+  the bound.
