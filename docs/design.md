@@ -289,3 +289,10 @@ Roadmap lens (stage ⑥–⑧):
 - **Determinism test** — two runs over the same `roadmap.toml` under `--as-of`
   produce byte-identical semantic output, including which five bets survived
   the bound.
+
+Fleet sweep (pre-release gate): `python3 scripts/validation/fleet_sweep.py`
+runs the installed binary over every local charly-vibes checkout and checks
+each brief against ground truth — exit 0, envelope contract, determinism,
+`head_sha` vs git, declared bounds, health layering, curation authority, and
+beads truth (closed beads never render, `next` never leaks curated ids).
+2026-11-18 baseline: 18/18 repos pass.
