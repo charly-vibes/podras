@@ -6,3 +6,4 @@ changes = "openspec/changes"
 
 [runners]
 pytest = ["pytest"]
+cargo = ["cargo", "test"]
