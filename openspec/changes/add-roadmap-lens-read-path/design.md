@@ -70,8 +70,8 @@ records, assembles the view, attaches it, and prints the same
 `ROADMAP.md` / `ROADMAP.json` in the repository root (or `--out-dir`), through
 the same generated-artifact path as the brief renders
 (`write::write_roadmap_renders_to(dir, brief)`). The roadmap narrative carries
-no whisper content, so the brief's `publish_whisper` gate is inherited untouched
-rather than re-implemented.
+no whisper content by construction, so the brief's `publish_whisper` gate has
+no roadmap-side counterpart to implement.
 
 Assembly is pure: `roadmap::assemble(&file, &records, evaluation_date)` takes
 the evaluation date as an argument, reads no clock, no filesystem, and no

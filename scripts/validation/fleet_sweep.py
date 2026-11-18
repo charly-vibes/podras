@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Pre-release gate: run the installed podras across the charly-vibes fleet
-and check its output against ground truth (git, beads export, curation).
+(the 18 registered repos in REPOS below — ddl's registry is the authoritative
+list; keep the two in sync) and check its output against ground truth (git,
+beads export, curation).
 
 Validates per repo: exit 0 · envelope contract (schema_version, five declared
 source rows in fixed order, row status vs filesystem) · determinism (two runs

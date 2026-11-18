@@ -82,9 +82,11 @@ as a **separate render path**, not an extension of the now-lens.
     epic. Neither is inferred from the other (corpus C1 + brief v1
     `curation_beats_inference`). Deliberate deviation: the corpus's one
     cross-cutting rendering rule (C6 — a constraint is shown only when it is
-    at risk) is **not** applied to v1's brief, which stays frozen; it lands in
-    v1.1 as a single line — a no-go renders in the brief's Health section only
-    when `no_go_violation_candidate` fires.
+    at risk) is **not** applied to v1's brief, which stays frozen; the
+    single-line Health render (a no-go shown only when
+    `no_go_violation_candidate` fires) is deferred — v1.1 shipped without it,
+    the roadmap change declares brief-narrative edits out of scope, and it is
+    tracked for a deliberate future change (amended by review DOC-003).
 17. **State file**: `.podras/roadmap.toml`, git-committed, sibling of
     `curation.toml`, written by verbs and humans only — **agents never edit
     it** (same rule as curation, decision 11; enforced textually by the
@@ -147,15 +149,20 @@ as a **separate render path**, not an extension of the now-lens.
 20. **Horizon is stored, then validated — not computed.** `horizon` is
     authoritative for rendering (determinism); harvest compares it against the
     linked epic's state and emits `horizon_epic_mismatch` when a `now` bet has
-    no open epic or a `later` bet has a closed one. Rejected alternative
+    no open epic or a `later` bet has a closed one — non-terminal bets only
+    (`shaping`, `committed`, `building`, `deferred`); terminal `shipped` and
+    `killed` bets are exempt (amended by review D5: a closed outcome cannot be
+    asked to move horizons). Rejected alternative
     (kimi's computed horizon) because it infers commitment from observable
     work — the same inference brief v1 forbids for focus.
 21. **Identity is linked, never generated.** The lens renders
     `identity.path`, `last_reviewed`, and staleness only. Staleness is decided
-    by `next_review` alone: absent `next_review` ⇒ `unknown` plus the
-    `identity_review_overdue` advisory (never `fresh` — the v1
-    `unknown_never_green` rule applies here too); present and passed ⇒
-    `stale`. No verb rewrites identity prose; harvest may emit an
+    by `next_review` alone: absent ⇒ `unknown`, passed ⇒ `stale`, equal or
+    later ⇒ `fresh` (never green-by-schedule — the v1 `unknown_never_green`
+    rule applies here too). The `identity_review_overdue` advisory fires on
+    the absent **or** passed branches, its detail naming which (amended by
+    review D7: a passed review is overdue by name and by fact). No verb
+    rewrites identity prose; harvest may emit an
     `identity_review` candidate only when `next_review` passes. "The code
     demonstrates what exists; it cannot establish what the project ought to
     be" (chatgpt).
@@ -171,15 +178,16 @@ as a **separate render path**, not an extension of the now-lens.
 23. **Roadmap health = named warnings, never a verdict.** They form a distinct
     enum `RoadmapWarningKind` (serde `snake_case`), carried in
     `roadmap.warnings`, never in `health.signals` — they are *not*
-    `SignalKind` variants. One exception is wired later: from v1.1 the brief's
-    Health section reads `no_go_violation_candidate` only (decision 16); every
-    other code stays lens-local and cannot change the brief's verdict. Codes,
-    all advisory, exit always 0:
+    `SignalKind` variants. The C6 exception (the brief's Health section
+    reading `no_go_violation_candidate` only — decision 16) is **deferred,
+    not wired**: every code stays lens-local and cannot change the brief's
+    verdict. Codes, all advisory, exit always 0:
     `bet_age_exceeds_appetite` — `committed`/`building` bets only, elapsed >
     `appetite_weeks`, and 1.25× (gemini; the corpus also proposes 1.5× and 2× —
     constant lives in config `roadmap.circuit_breaker_factor`, default 1.25)
     escalates to `circuit_breaker_due`;
-    `bet_epic_missing` (committed without epic), `bet_epic_closed_not_retired`
+    `bet_epic_missing` (committed, building, or shipped without epic —
+    amended by review D4), `bet_epic_closed_not_retired`
     (epic closed while bet active), `bet_no_transition` (bead `updated_at`
     older than 14d), `horizon_epic_mismatch`,
     `no_go_violation_candidate` — matched by evaluating each no-go's
@@ -291,8 +299,9 @@ Roadmap lens (stage ⑥–⑧):
   the bound.
 
 Fleet sweep (pre-release gate): `python3 scripts/validation/fleet_sweep.py`
-runs the installed binary over every local charly-vibes checkout and checks
-each brief against ground truth — exit 0, envelope contract, determinism,
-`head_sha` vs git, declared bounds, health layering, curation authority, and
-beads truth (closed beads never render, `next` never leaks curated ids).
-2026-11-18 baseline: 18/18 repos pass.
+runs the installed binary over the 18 registered fleet repos (the script's
+`REPOS` table; ddl's registry is the authoritative list — keep them in sync)
+and checks each brief against ground truth — exit 0, envelope contract,
+determinism, `head_sha` vs git, declared bounds, health layering, curation
+authority, and beads truth (closed beads never render, `next` never leaks
+curated ids). 2026-11-18 baseline: 18/18 repos pass.
