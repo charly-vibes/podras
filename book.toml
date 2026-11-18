@@ -1,0 +1,13 @@
+[book]
+title = "podras"
+description = "Deterministic per-repo project status briefs for humans and AI agents"
+authors = ["charly vibes"]
+language = "en"
+src = "docs/src"
+
+[output.html]
+default-theme = "coal"
+preferred-dark-theme = "coal"
+additional-css = ["theme/charly.css"]
+git-repository-url = "https://github.com/charly-vibes/podras"
+edit-url-template = "https://github.com/charly-vibes/podras/edit/main/docs/src/{path}"
