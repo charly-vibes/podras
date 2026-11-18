@@ -88,3 +88,257 @@ Curation-item lifecycle (one item of work in a repository):
 | curation_file_shape | unit | [[brief.v1.curation_location]] | `curation_toml_at_default_path_with_focus_and_parked()` | `parsed focus/parked entries round-trip equal to written entries ∧ purpose_lite present` |
 | bounds_declared | unit | [[brief.v1.bounded_defaults]] | `fixture_repo_with_many_items_per_section()` | `envelope section counts == declared bounds (1 focus, 5 recent, 5 blockers, 5 next, 5 parked) ∧ warnings section unbounded` |
 | corpus_self_lint | unit | [[brief.v1.enforcement_routed]] | `spk_lint_over_this_corpus()` | `check(openspec/specs) == passed` — the corpus must satisfy its own declared shape before any runtime tier is claimed |
+
+## Requirements
+
+### Requirement: Deterministic brief payload
+
+`podras brief` SHALL compute status only from the declared sources and SHALL
+NOT store brief state. Two runs over identical inputs with the same `--as-of`
+SHALL produce identical semantic payloads, excluding volatile metadata such as
+`generated_at`. Reads SHALL be side-effect free. Computed sections SHALL use
+deterministic ordering (priority ascending, then id ascending); recent events
+SHALL order by commit time descending, then sha; warnings SHALL order by
+`(source, code)`.
+
+#### Scenario: determinism_payload
+
+- **WHEN** `podras brief --json` runs twice on an unchanged fixture repository with the same `--as-of`
+- **THEN** the two semantic payloads are equal and only `generated_at` may differ
+- **VERIFIES** [[brief.v1.determinism_payload]]
+
+### Requirement: Fixed-section brief read path
+
+The brief SHALL render nine fixed sections in cold-return order: purpose /
+current state, focus, in flight, blocked / waiting, next / ready, parked,
+recent, health + confidence, sources & freshness. Focus and parked SHALL render
+exclusively from curation state; a parked item SHALL NOT appear in next / ready
+or any computed queue. The narrative and the envelope SHALL carry the same
+semantic content.
+
+#### Scenario: focus_not_inferred
+
+- **WHEN** a fixture repository has a tracker top-priority item that differs from the curation focus, and curation also parks an item
+- **THEN** `brief.focus.id` equals the curated focus id, differs from the tracker top-priority id, and the parked item is absent from the next section
+- **VERIFIES** [[brief.v1.focus_not_inferred]]
+
+### Requirement: Declared sources with independent degradation
+
+The brief SHALL declare beads and git as mandatory sources, openspec as
+best-effort, whisper notes as a light-read, and curation as read-if-present.
+Each read SHALL be isolated so one missing or unreadable source cannot abort
+the render. A missing or unreadable source SHALL produce an explicit
+per-source warning row with the source name, its `present` / `missing` /
+`unreadable` status, and a stable code, while the remaining sources render and
+the command exits 0.
+
+#### Scenario: missing_source_warns
+
+- **WHEN** `podras brief --json` runs on a fixture repository without a spec store
+- **THEN** the openspec source status is `missing`, the warnings list is non-empty, and the process exits 0
+- **VERIFIES** [[brief.v1.missing_source_warns]]
+
+### Requirement: Per-source freshness
+
+Every source entry in the envelope SHALL report its own `status`,
+`observed_at`, `staleness` (`fresh` / `stale` / `unknown`), and `detail`.
+Staleness SHALL be judged per source; the envelope SHALL NOT carry a
+project-wide staleness field. The curation section SHALL carry `updated_at`
+and `confirmed_at` separately: unchanged focus is not stale, while a focus
+that no human has recently confirmed is.
+
+#### Scenario: stale_source_flagged
+
+- **WHEN** a fixture repository has one stale source and one fresh source
+- **THEN** the stale source entry reports `staleness = stale`, the fresh source entry reports `staleness = fresh`, and the envelope exposes no project-wide staleness field
+- **VERIFIES** [[brief.v1.stale_source_flagged]]
+
+### Requirement: Bounded sections with declared truncation
+
+The agent envelope SHALL apply bounded defaults: 1 focus, 5 recent, 5 blocked,
+5 next, and 5 parked items, while the warnings list SHALL remain unbounded.
+Whenever any bound removes items, the envelope SHALL set
+`truncation.applied = true` and SHALL record the per-section removed count in
+`truncation.omitted_counts`. Silent truncation SHALL NOT occur.
+
+#### Scenario: bounds_declared
+
+- **WHEN** a fixture repository has more items per section than the declared bounds
+- **THEN** the envelope section counts equal the declared bounds (1 focus, 5 recent, 5 blocked, 5 next, 5 parked) and the warnings section remains unbounded
+- **VERIFIES** [[brief.v1.bounds_declared]]
+
+#### Scenario: truncation_flagged
+
+- **WHEN** a fixture repository produces more than five recent events
+- **THEN** `truncation.applied` is true and `omitted_counts.recent` equals the total recent events minus five
+- **VERIFIES** [[brief.v1.truncation_flagged]]
+
+### Requirement: Typed agent envelope
+
+`podras brief --json` SHALL emit a typed envelope carrying only typed fields
+and enumerations: `schema_version`, `generated_at`, `sources[]`,
+`curation{updated_at, confirmed_at}`, `health{status, basis, signals, owner,
+reason}`, `truncation{applied, omitted_counts}`, `head_sha`, `source_hash`,
+`warnings[]`. Status values SHALL be enum members, never prose. `podras schema`
+SHALL emit the envelope's JSON Schema 2020-12, and every envelope SHALL
+validate against it.
+
+#### Scenario: envelope_schema_conform
+
+- **WHEN** `podras brief --json` runs on a fixture repository and its output is validated against the schema emitted by `podras schema`
+- **THEN** validation succeeds under JSON Schema 2020-12 and every status field is an enum member
+- **VERIFIES** [[brief.v1.envelope_schema_conform]]
+
+### Requirement: Committed render is generated, never authored
+
+`podras brief --write` SHALL write `BRIEF.md` and `BRIEF.json` as generated
+artifacts. Committed renders SHALL differ from on-demand output only in
+`generated_at` and SHALL carry the freshness stamp. A hand edit SHALL be
+overwritten by the next regeneration, never merged. Whisper-derived content
+SHALL appear only on demand: the committed render carries the whisper
+`observed_at` stamp and no note content unless `publish_whisper` is enabled.
+
+#### Scenario: hand_edit_render_overwritten
+
+- **WHEN** a committed render is hand edited and `podras brief --write` runs again
+- **THEN** the regenerated render equals a fresh render and the hand edit is absent
+- **VERIFIES** [[brief.v1.hand_edit_render_overwritten]]
+
+#### Scenario: whisper_privacy
+
+- **WHEN** a fixture repository has local session notes and `publish_whisper` is disabled
+- **THEN** the committed render contains no note content, its whisper source entry carries `observed_at`, and the on-demand output contains the next-action line
+- **VERIFIES** [[brief.v1.whisper_privacy]]
+
+### Requirement: Curation file shape and idempotent init
+
+Curation state SHALL live in the git-committed `.podras/curation.toml` with
+`purpose_lite`, `max_focus`, `publish_whisper`, `[health]`, `[[focus]]`, and
+`[[parked]]` entries carrying ids, reasons, timestamps, and a date-or-event
+resurface trigger. Humans MAY hand-edit it; agents SHALL be instructed never
+to. `podras init` SHALL idempotently scaffold the file when absent, preserve
+existing bytes, and refresh the AGENTS.md managed block via genesis
+`managed_block`.
+
+#### Scenario: curation_file_shape
+
+- **WHEN** a curation file at the default path is parsed, then written back, with focus and parked entries
+- **THEN** the parsed focus and parked entries round-trip equal to the written entries and `purpose_lite` is present
+- **VERIFIES** [[brief.v1.curation_file_shape]]
+
+### Requirement: Curation verbs for focus and park
+
+`podras focus <id>` SHALL be select-or-replace with a demotion notice, capped
+at `max_focus` (default 1). Exceeding the cap SHALL emit a `wip_over_cap`
+health warning without blocking the render. `podras park <id>` SHALL require a
+reason and a date-or-event resurface trigger; an expired trigger SHALL move the
+item to needs-re-triage and out of parked. Parked items SHALL never render as
+ready or next.
+
+#### Scenario: focus_cap_signal
+
+- **WHEN** the curation file contains two focus rows while `max_focus` is 1
+- **THEN** `podras brief` succeeds and health warnings include the `wip_over_cap` signal
+- **VERIFIES** [[brief.v1.focus_cap_signal]]
+
+#### Scenario: park_expired_surfaces
+
+- **WHEN** the curation file contains a parked entry whose resurface trigger has passed
+- **THEN** the needs-re-triage section contains the item and the parked section does not
+- **VERIFIES** [[brief.v1.park_expired_surfaces]]
+
+### Requirement: Health verdict layering
+
+The health verdict SHALL be layered: a fresh human verdict (`basis = human`)
+stands; otherwise firing signals decide (`basis = signals`, `amber`); otherwise
+status is `unknown` (`basis = none`). Green SHALL require a fresh human
+confirmation and no firing signal, never silence. Signals SHALL be named with a
+reason: `stale_focus`, `wip_over_cap`, `stuck_project`, `focus_closed`,
+`parked_expired`, `orphan_commits`, `spec_change_without_bead`. Human verdicts
+SHALL expire.
+
+#### Scenario: silence_is_unknown
+
+- **WHEN** a fixture repository has no human verdict and no firing signal
+- **THEN** the envelope health status is `unknown` and the health basis is `none`
+- **VERIFIES** [[brief.v1.silence_is_unknown]]
+
+### Requirement: Corpus self-lint gate
+
+The specification corpus SHALL satisfy its own declared shape before any
+runtime tier is claimed: `spk lint openspec/specs` SHALL pass with no issues.
+
+#### Scenario: corpus_self_lint
+
+- **WHEN** `spk lint openspec/specs` runs over this repository
+- **THEN** the lint check passes with exit 0 and reports no issues
+- **VERIFIES** [[brief.v1.corpus_self_lint]]
+
+### Requirement: Harvest candidates are proposals, never decisions
+
+`podras harvest [--json] [--as-of <date>]` SHALL extract typed candidates from
+whisper notes, git, and the spec store. Every candidate SHALL carry `kind`,
+`summary`, and at least one `{kind: git|notes, ref}` evidence entry;
+evidence-free candidates SHALL NOT be emitted. Harvest SHALL be idempotent,
+SHALL NOT write curation, create or close issues, or change focus/parked state,
+and SHALL exit 0 on degraded sources. Output is on-demand only: no committed
+artifact or `--write`/`--out-dir`.
+
+#### Scenario: harvest_candidates_never_decisions
+
+- **WHEN** `podras harvest --json` runs on a fixture repository whose notes, git history, and spec store contain an orphan commit, an unlinked spec change, and a note reference to a missing tracker id
+- **THEN** every emitted candidate carries a kind, a summary, and at least one git-or-notes evidence ref; the curation file and tracker export bytes are unchanged; focus and parked entries are unchanged; and the command exits 0
+- **VERIFIES** [[brief.v1.harvest_candidates_never_decisions]]
+
+#### Scenario: harvest_idempotent_provenance
+
+- **WHEN** `podras harvest` runs twice over unchanged inputs with the same `--as-of`
+- **THEN** both runs emit the same candidate set in the same order, every evidence ref resolves to an existing git object or note entry, and no repository file changes between runs
+- **VERIFIES** [[brief.v1.harvest_idempotent_provenance]]
+
+### Requirement: Declared freshness thresholds and fault-resistant verdicts
+
+Staleness SHALL read one declared threshold table covering every source exactly
+once: beads 7 days, git 7 days, openspec 14, whisper 14, curation 14. An
+observation on its horizon SHALL be `fresh`, one day past `stale`, absent
+`unknown`. A mandatory source (beads, git) that is missing, unreadable, or
+stale SHALL prevent `green`: a fresh human green SHALL downgrade to `amber`
+(`basis = human`), naming the impaired source. The envelope SHALL keep
+per-source `staleness` only.
+
+#### Scenario: freshness_thresholds_declared
+
+- **WHEN** the freshness thresholds are read and a fixture repository is evaluated with one source observed exactly on its horizon, another observed one day past it, and beads fault-injected as stale under a fresh human green verdict
+- **THEN** the table declares beads 7, git 7, openspec 14, whisper 14, and curation 14 days exactly once per source; the on-horizon source is `fresh`, the past-horizon source is `stale`; and health is `amber`, not `green`, with the impaired mandatory source named in the reason
+- **VERIFIES** [[brief.v1.freshness_thresholds_declared]]
+
+### Requirement: Reproducible as-of evaluation
+
+`podras brief --as-of <date>` SHALL pin every date-sensitive decision:
+staleness, resurface triggers, and human-verdict freshness. `generated_at`
+SHALL remain wall-clock and the only volatile field; with the same `--as-of`
+and inputs, payloads and committed renders SHALL differ only in
+`generated_at`. An unparseable date SHALL exit 2 and write no render. Harvest
+SHALL accept the same flag with the same semantics.
+
+#### Scenario: as_of_reproducible_render
+
+- **WHEN** `podras brief --json --as-of 2026-11-18` and `podras brief --write --as-of 2026-11-18` each run twice on unchanged inputs, including a human verdict and a parked trigger exactly on their freshness boundaries
+- **THEN** the two payloads are equal after removing `generated_at`, the two `BRIEF.json` renders differ only in `generated_at`, the two `BRIEF.md` renders differ only in the `generated_at` value of the freshness stamp, and the boundary verdicts do not flip between runs
+- **VERIFIES** [[brief.v1.as_of_reproducible_render]]
+
+### Requirement: Committed render drift gate
+
+The repository SHALL provide `scripts/guards/brief-drift.sh` to regenerate both
+renders into a temporary directory at the committed render's evaluation date
+(or an explicit date), normalize volatile and freshness-provenance fields, and
+diff. It SHALL exit 0 on a match, non-zero naming the divergent artifact on
+drift, never write the working tree, and no-op without committed renders.
+`brief --write --out-dir <DIR>` SHALL target a directory. The gate SHALL be
+opt-in in lefthook/CI.
+
+#### Scenario: drift_gate_detects_stale_render
+
+- **WHEN** `scripts/guards/brief-drift.sh` runs against a committed render, and again after the fixture repository gains a commit without re-rendering
+- **THEN** the first run exits 0, the second exits non-zero and names the divergent render, and `BRIEF.md` and `BRIEF.json` are byte-identical before and after both runs
+- **VERIFIES** [[brief.v1.drift_gate_detects_stale_render]]
