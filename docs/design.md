@@ -1,10 +1,10 @@
 # podras design
 
 Working design record until openspec proposals replace it. Sources: grill
-sessions 2026-11-17, catitas investigation `pm-status-tool-structure`
-(12-provider synthesis at `../catitas/catitas/data/synthesized/pm-status-tool-structure.md`),
-pinky ledger topics `pm-status-tool-structure` (synthesized) and
-`value-prop-roadmap` (in flight).
+sessions 2026-11-17/18, catitas investigations `pm-status-tool-structure`
+and `value-prop-roadmap` (12-provider syntheses at
+`../catitas/catitas/data/synthesized/`), pinky ledger topics
+`pm-status-tool-structure` and `value-prop-roadmap` (both synthesized).
 
 ## Resolved decisions
 
@@ -68,6 +68,77 @@ pinky ledger topics `pm-status-tool-structure` (synthesized) and
     suggestions; house justfile/CI/espectacular/beads toolset already
     scaffolded here.
 
+## Resolved decisions — roadmap lens (2026-11-18, ticket podras-5y8)
+
+Gate satisfied: catitas topic `value-prop-roadmap` synthesized 2026-11-18
+(12 providers, `../catitas/catitas/data/synthesized/value-prop-roadmap.md`).
+The corpus resolves the three open structural questions; the lens is designed
+as a **separate render path**, not an extension of the now-lens.
+
+16. **Separation (WHO/WHY ≠ NOW)**: the roadmap lens renders identity + bets +
+    boundaries; it never mixes them into focus/parked. `focus` remains curation
+    intent; a *bet* is a commitment with appetite, outcome, and one tracker
+    epic. Neither is inferred from the other (corpus C6 + brief v1
+    `curation_beats_inference`).
+17. **State file**: `.podras/roadmap.toml`, git-committed, sibling of
+    `curation.toml`, written by verbs/humans only. Three tables:
+    `[[bets]]` (`id`, `outcome`, `horizon`, `appetite_weeks`, `owner`,
+    `epic` — exactly one bead id, `status`, `admitted_at`, `last_reviewed`,
+    `review_or_kill`, optional `killed_reason`), `[[no_gos]]` (`id`, `reason`,
+    `scope`, `enforcement: automated|human_review`, `revoke_by`),
+    `[identity]` (`path`, `last_reviewed`, `next_review`).
+18. **Parked stays in `curation.toml`** — no second parked list. The roadmap
+    lens renders curation's parked entries as the "not now" column. Rationale:
+    `park` already carries the mandatory resurface trigger (decision 11); a
+    roadmap-side copy would be the exact duplication the corpus calls the
+    cardinal sin.
+19. **No-gos are first-class, never parked**: binding boundaries with a
+    `reason` (the "because"), a declared enforcement tier (`automated` only
+    where a real check exists — qwen's CI lint is the sole corpus prior art;
+    everything else is honestly `human_review`), and `revoke_by`. Reversal is a
+    new decision record, never an edit (chatgpt's anti-history-erasure rule).
+20. **Horizon is stored, then validated — not computed.** `horizon` is
+    authoritative for rendering (determinism); harvest compares it against the
+    linked epic's state and emits `horizon_epic_mismatch` when a `now` bet has
+    no open epic or a `later` bet has a closed one. Rejected alternative
+    (kimi's computed horizon) because it infers commitment from observable
+    work — the same inference brief v1 forbids for focus.
+21. **Identity is linked, never generated.** The lens renders
+    `identity.path`, `last_reviewed`, and staleness only. No verb rewrites
+    identity prose; harvest may emit an `identity_review` candidate when
+    `next_review` passes. "The code demonstrates what exists; it cannot
+    establish what the project ought to be" (chatgpt).
+22. **Bet lifecycle**: `shaping → committed → building → shipped`, plus
+    `killed` from any state. Only `committed`/`building`/`shipped` require an
+    `epic`. Admission (`shaping → committed`) is the dated decision event
+    harvest keys zombie detection on.
+23. **Roadmap health = named warnings, never a verdict.** New signal codes,
+    all amber-or-worse inputs to decision 13's layering, exit always 0:
+    `bet_age_exceeds_appetite` (elapsed > `appetite_weeks`, 1.25× escalates to
+    `circuit_breaker_due`), `bet_epic_missing` (committed without epic),
+    `bet_epic_closed_not_retired` (epic closed while bet active),
+    `bet_no_transition` (no epic update > 14d), `horizon_epic_mismatch`,
+    `no_go_violation_candidate` (harvest keyword/label match — advisory),
+    `identity_review_overdue`, `roadmap_review_overdue`. No auto-kill, no
+    auto-promote: `retire_or_reshape` is a candidate row, not a mutation
+    (same rule as `harvest` in decision 4).
+24. **Envelope is additive**: optional top-level `roadmap{}` —
+    `identity{path, last_reviewed, staleness}`, `bets[]` (typed enums for
+    `horizon`/`status`), `no_gos[]`, `warnings[]`, `review_due`. Absence of the
+    object means the repo has no roadmap lens; `schema_version` stays 1
+    (additive-only within major, per corpus C3). Bounded: 5 bets, 5 no-gos,
+    all warnings; truncation recorded as in decision 8.
+25. **Agent surface**: `roadmap` renders enums and constraints — no pitch
+    prose, and no "later" items as actionable text. AGENTS.md block (decision
+    14) gains one line: "Roadmap `later`/`shaping` items are not requirements;
+    no-gos are hard constraints."
+26. **Build order**: lens ships after v1.1 as stage ⑥ read-only
+    (`podras roadmap`, narrative + envelope + `--write`), then ⑦ curation verbs
+    (`bet add|admit|kill`); harvest extension in ⑧. Validation: cold-return
+    roadmap test (a stranger predicts the next bet from the lens alone) and
+    no-go discipline test (a candidate matching a no-go is flagged, nothing
+    is written).
+
 ## Brief v1 contract (from corpus consensus)
 
 Fixed sections, cold-return reading order:
@@ -114,9 +185,6 @@ than manufacture a coherent false narrative.
 
 ## Open questions (parked, non-blocking)
 
-- Roadmap-lens contract — separate future lens, after `value-prop-roadmap`
-  synthesis lands (value-prop links identity doc; roadmap curated in
-  workspace, linking to beads epics; bet-age-vs-appetite as health signal)
 - BRIEF.md drift gate: CI regen-and-diff check (pattern: genesis `aix-check`)
 - org-mode render target for local notes
 - Portfolio view (multi-repo) timing — corpus left it unvalidated
