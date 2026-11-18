@@ -44,9 +44,13 @@ pub struct FocusEntry {
 pub struct ParkEntry {
     /// Parked item identifier.
     pub id: String,
-    /// Why it is parked; required by the park verb.
+    /// Why it is parked; the park verb requires it, and a missing or empty value
+    /// invalidates the entry at read time.
+    #[serde(default)]
     pub reason: String,
-    /// `YYYY-MM-DD` date or `event:<name>` trigger; required.
+    /// `YYYY-MM-DD` date or `event:<name>` trigger; the park verb requires it,
+    /// and a missing or malformed value invalidates the entry at read time.
+    #[serde(default)]
     pub resurface: String,
     /// When it was parked.
     #[serde(default)]
@@ -160,7 +164,9 @@ pub fn load(repo: &Path) -> Result<Option<CurationFile>> {
             code: "curation_parse_error",
             message: format!("{CURATION_REL_PATH}: {error}"),
             suggestion: Some(
-                "fix the TOML or run `podras init` to scaffold a valid curation file".to_string(),
+                "fix the TOML, or delete .podras/curation.toml and run podras init to start \
+                 from the template"
+                    .to_string(),
             ),
         })
 }

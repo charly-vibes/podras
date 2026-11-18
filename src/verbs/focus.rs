@@ -14,21 +14,22 @@ use std::path::Path;
 use chrono::NaiveDate;
 
 use crate::curation::{self, CurationFile, FocusEntry};
-use crate::error::{Error, Result};
-use crate::readers::{self, ReadContext};
+use crate::error::Result;
 
 /// Focus cap used when curation does not declare one.
 const DEFAULT_MAX_FOCUS: usize = 1;
 
 /// Select the curated focus item for the repository.
 pub fn run(repo: &Path, id: &str) -> Result<()> {
+    super::resolve_open_item(repo, id, "focus_unresolved")?;
     let mut curation = curation::load(repo)?.unwrap_or_default();
-    resolve(repo, id)?;
+    let unparked = drop_parked(&mut curation, id);
     let today = today();
 
     if let Some(entry) = curation.focus.iter_mut().find(|entry| entry.id == id) {
         entry.confirmed_at = Some(today.clone());
         curation::save(repo, &curation)?;
+        report_unparked(unparked, id);
         println!("already focused {id}; confirmed {today}");
         return Ok(());
     }
@@ -44,31 +45,27 @@ pub fn run(repo: &Path, id: &str) -> Result<()> {
     for old in demoted {
         println!("demoted {old}: focus replaced by {id}");
     }
+    report_unparked(unparked, id);
     println!("focused {id}");
     Ok(())
 }
 
-/// Reject ids the readable beads export does not list as open.
+/// Drop the parked entry for `id`, reporting whether one was removed.
 ///
-/// An absent or unreadable export cannot answer the question, so the verb
-/// accepts the id instead of inventing a tracker condition the repo never made.
-fn resolve(repo: &Path, id: &str) -> Result<()> {
-    let context = ReadContext {
-        repo_root: repo.to_path_buf(),
-        as_of: None,
-        branch: None,
-    };
-    let Some(beads) = readers::beads::read(&context).data else {
-        return Ok(());
-    };
-    if beads.open.iter().any(|item| item.id == id) {
-        return Ok(());
+/// Focusing is the re-triage transition: a human bringing an expired park back
+/// into attention is unparking it, so the stale row must not keep feeding
+/// `needs_retriage` alongside the focus entry.
+fn drop_parked(curation: &mut CurationFile, id: &str) -> bool {
+    let before = curation.parked.len();
+    curation.parked.retain(|entry| entry.id != id);
+    curation.parked.len() != before
+}
+
+/// Print the unpark notice after the file write already succeeded.
+fn report_unparked(unparked: bool, id: &str) {
+    if unparked {
+        println!("unparked {id}");
     }
-    Err(Error::Domain {
-        code: "focus_unresolved",
-        message: format!("`{id}` is not an open issue in the beads export"),
-        suggestion: Some("run bd list".to_string()),
-    })
 }
 
 /// Demote focus entries until one more fits under the cap, returning their ids.

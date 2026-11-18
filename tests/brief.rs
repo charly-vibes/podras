@@ -71,15 +71,15 @@ fn commit(sha: &str) -> RecentEvent {
     }
 }
 
-/// Inputs where tracker top priority and curation focus disagree.
-fn curated_inputs() -> BriefInputs {
-    let beads = BeadsSummary {
-        open: vec![
-            item(TOP_PRIORITY_ID, Some(0)),
-            item(FOCUS_ID, Some(3)),
-            item(PARKED_ID, Some(1)),
-            item("podras-d", Some(5)),
-        ],
+fn curated_beads() -> BeadsSummary {
+    let open = vec![
+        item(TOP_PRIORITY_ID, Some(0)),
+        item(FOCUS_ID, Some(3)),
+        item(PARKED_ID, Some(1)),
+        item("podras-d", Some(5)),
+    ];
+    BeadsSummary {
+        open,
         blocked: Vec::new(),
         ready: vec![
             item(TOP_PRIORITY_ID, Some(0)),
@@ -88,23 +88,35 @@ fn curated_inputs() -> BriefInputs {
             item("podras-d", Some(5)),
         ],
         observed_at: Some(instant()),
-    };
-    let git = GitSummary {
+    }
+}
+
+fn curated_git() -> GitSummary {
+    GitSummary {
         head_sha: Some("head123".to_string()),
         recent: vec![commit("abc1234")],
         observed_at: Some(instant()),
-    };
-    let specs = SpecSummary {
+    }
+}
+
+fn curated_specs() -> SpecSummary {
+    SpecSummary {
         changes: Vec::new(),
         stale_count: 0,
         observed_at: Some(instant()),
-    };
-    let whisper = WhisperReading {
+    }
+}
+
+fn curated_whisper() -> WhisperReading {
+    WhisperReading {
         observed_at: Some(instant()),
         next_action: Some("pick up podras-b".to_string()),
         content_hash: None,
-    };
-    let curation = CurationFile {
+    }
+}
+
+fn curated_file() -> CurationFile {
+    CurationFile {
         purpose_lite: Some("podras: status read path for a cold return".to_string()),
         max_focus: Some(1),
         publish_whisper: Some(false),
@@ -127,21 +139,29 @@ fn curated_inputs() -> BriefInputs {
             parked_at: Some("2026-11-10".to_string()),
             confirmed_at: Some("2026-11-10".to_string()),
         }],
-    };
+    }
+}
+
+fn curated_sources() -> Vec<SourceStatus> {
+    vec![
+        source(SourceName::Beads, SourceState::Present),
+        source(SourceName::Git, SourceState::Present),
+        source(SourceName::Curation, SourceState::Present),
+    ]
+}
+
+/// Inputs where tracker top priority and curation focus disagree.
+fn curated_fixture() -> BriefInputs {
     BriefInputs {
-        beads: Some(beads),
-        git: Some(git),
-        specs: Some(specs),
-        whisper: Some(whisper),
+        beads: Some(curated_beads()),
+        git: Some(curated_git()),
+        specs: Some(curated_specs()),
+        whisper: Some(curated_whisper()),
         curation: Some(CurationState {
-            curation,
+            curation: curated_file(),
             updated_at: Some(instant()),
         }),
-        sources: vec![
-            source(SourceName::Beads, SourceState::Present),
-            source(SourceName::Git, SourceState::Present),
-            source(SourceName::Curation, SourceState::Present),
-        ],
+        sources: curated_sources(),
         warnings: Vec::new(),
         as_of: Some(day("2026-11-18")),
         now: day("2026-11-01"),
@@ -196,7 +216,7 @@ fn assert_none_line(body: &str, heading: &str) {
 
 #[test]
 fn focus_not_inferred() {
-    let brief = assemble(&curated_inputs());
+    let brief = assemble(&curated_fixture());
 
     assert_eq!(brief.focus.len(), 1, "curation declares exactly one focus");
     assert_eq!(brief.focus[0].id, FOCUS_ID, "focus must follow curation");
@@ -239,7 +259,7 @@ fn focus_not_inferred() {
 
 #[test]
 fn render_nine_sections_in_cold_return_order() {
-    let brief = assemble(&curated_inputs());
+    let brief = assemble(&curated_fixture());
     let rendered = markdown::render(&brief, None).expect("render the narrative");
 
     assert_eq!(
@@ -268,6 +288,11 @@ fn empty_sections_render_none_lines() {
     let brief: Brief = assemble(&empty_inputs());
     let rendered = markdown::render(&brief, None).expect("render the narrative");
 
+    assert_eq!(
+        headings(&rendered).len(),
+        9,
+        "an empty brief still renders every fixed section"
+    );
     for heading in [
         "Purpose / current state",
         "Focus",
@@ -290,7 +315,7 @@ fn empty_sections_render_none_lines() {
 
 #[test]
 fn health_line_carries_status_basis_reason_and_owner() {
-    let brief = assemble(&curated_inputs());
+    let brief = assemble(&curated_fixture());
     let rendered = markdown::render(&brief, None).expect("render the narrative");
     let rendered_health = section(&rendered, "Health + confidence");
 
@@ -321,7 +346,7 @@ fn health_line_carries_status_basis_reason_and_owner() {
 
 #[test]
 fn reentry_line_only_when_supplied() {
-    let brief = assemble(&curated_inputs());
+    let brief = assemble(&curated_fixture());
 
     let committed = markdown::render(&brief, None).expect("render the narrative");
     assert!(

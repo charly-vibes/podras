@@ -34,36 +34,25 @@ fn context(repo: &TempRepo) -> ReadContext {
     }
 }
 
-/// Force a fixed mtime on a repository-relative directory tree.
+/// Force a fixed mtime on every file below a repository-relative directory.
 fn set_mtime(repo: &TempRepo, rel: &str, stamp: &str) {
-    let path = repo.root().join(rel);
     // Apply the stamp to every file below the directory so the newest mtime the
     // reader observes is fixed regardless of how the fixture wrote the files.
-    let mut stack = vec![path];
-    while let Some(path) = stack.pop() {
-        let meta = std::fs::symlink_metadata(&path).expect("stat fixture path");
-        if meta.is_dir() {
-            for entry in std::fs::read_dir(&path).expect("list fixture directory") {
-                stack.push(entry.expect("fixture entry").path());
-            }
-        } else {
-            let output = Command::new("touch")
-                .arg("-d")
-                .arg(stamp)
-                .arg(&path)
-                .output()
-                .expect("run touch on fixture file");
-            assert!(
-                output.status.success(),
-                "touch -d {stamp} failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-    }
+    let output = Command::new("find")
+        .arg(repo.root().join(rel))
+        .args(["-type", "f", "-exec", "touch", "-d", stamp, "{}", "+"])
+        .output()
+        .expect("run find on the fixture tree");
+    assert!(
+        output.status.success(),
+        "touch -d {stamp} under {rel} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
-#[test]
-fn specs_reader_reads_changes_and_specs() {
+/// Repository holding two changes (one stale), an archived change, a spec, and
+/// fixed mtimes.
+fn seeded_repo() -> TempRepo {
     let repo = TempRepo::new();
     repo.write(
         "openspec/changes/fresh-change/proposal.md",
@@ -82,7 +71,6 @@ fn specs_reader_reads_changes_and_specs() {
         "# Brief v1 spec\n\n## Requirements\n",
     );
     repo.write("openspec/changes/stale-change/tasks.md", "## 1. Work\n");
-
     set_mtime(
         &repo,
         "openspec/changes/fresh-change",
@@ -99,8 +87,14 @@ fn specs_reader_reads_changes_and_specs() {
         "2026-10-15T00:00:00Z",
     );
     set_mtime(&repo, "openspec/specs/brief-v1", "2026-10-20T00:00:00Z");
+    repo
+}
 
-    let read = specs::read(&context(&repo));
+#[test]
+fn specs_reader_reads_changes_and_specs() {
+    let repo = seeded_repo();
+
+    let read = specs::read(&context(&repo), as_of());
 
     assert_eq!(read.status.name, SourceName::Openspec);
     assert_eq!(read.status.status, SourceState::Present);
@@ -156,7 +150,7 @@ fn specs_only_layout_stays_present() {
     repo.write("openspec/specs/only-spec/spec.md", "# Only spec\n");
     set_mtime(&repo, "openspec/specs/only-spec", "2026-10-29T00:00:00Z");
 
-    let read = specs::read(&context(&repo));
+    let read = specs::read(&context(&repo), as_of());
 
     assert_eq!(read.status.name, SourceName::Openspec);
     assert_eq!(read.status.status, SourceState::Present);
@@ -190,7 +184,7 @@ fn empty_openspec_root_stays_present() {
     let repo = TempRepo::new();
     std::fs::create_dir_all(repo.root().join("openspec")).expect("create empty openspec root");
 
-    let read = specs::read(&context(&repo));
+    let read = specs::read(&context(&repo), as_of());
 
     assert_eq!(read.status.status, SourceState::Present);
     assert!(read.warnings.is_empty(), "warnings: {:?}", read.warnings);
@@ -212,7 +206,7 @@ fn titles_fall_back_to_the_other_document() {
         "# Spec from proposal\n",
     );
 
-    let read = specs::read(&context(&repo));
+    let read = specs::read(&context(&repo), as_of());
     let summary = read.data.expect("present store yields a summary");
 
     let change = summary
@@ -234,7 +228,7 @@ fn titles_fall_back_to_the_other_document() {
 fn missing_openspec_tree_warns_without_failing() {
     let repo = TempRepo::new();
 
-    let read = specs::read(&context(&repo));
+    let read = specs::read(&context(&repo), as_of());
 
     assert!(read.data.is_none(), "absent store carries no data");
     assert_eq!(read.status.name, SourceName::Openspec);

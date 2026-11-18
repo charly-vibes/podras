@@ -9,224 +9,26 @@
 //! diffed. Comparing semantic payloads drops the one volatile field while
 //! keeping every other field under assertion.
 
-use chrono::{DateTime, NaiveDate, TimeZone, Utc};
-use podras::brief::{
-    BeadsSummary, BriefInputs, CurationState, GitSummary, SpecSummary, WhisperReading, assemble,
+mod common;
+#[path = "determinism/fixtures.rs"]
+mod fixtures;
+
+use fixtures::{
+    BOUNDARY_AS_OF, boundary_fixture, brief_json_at, day, inputs, instant,
+    normalize_freshness_stamp, podras_in, read_json, source_row, strip_generated_at,
 };
-use podras::curation::{CurationFile, CurationHealth, FocusEntry, ParkEntry};
+use podras::brief::assemble;
 use podras::model::{
-    HealthBasis, HealthStatus, RecentEvent, SignalKind, SourceName, SourceState, SourceStatus,
-    Staleness, Warning, WorkItem, semantic_payload, source_hash,
+    Brief, HealthBasis, HealthStatus, SignalKind, SourceName, WorkItem, semantic_payload,
+    source_hash,
 };
-
-fn day(raw: &str) -> NaiveDate {
-    NaiveDate::parse_from_str(raw, "%Y-%m-%d").expect("fixture dates are valid")
-}
-
-fn instant(hour: u32) -> DateTime<Utc> {
-    Utc.with_ymd_and_hms(2026, 11, 18, hour, 0, 0)
-        .single()
-        .expect("fixture instants are valid")
-}
-
-fn item(id: &str, priority: Option<u8>) -> WorkItem {
-    WorkItem {
-        id: id.to_string(),
-        title: Some(format!("title {id}")),
-        status: Some("open".to_string()),
-        priority,
-        blocked_by: Vec::new(),
-        age_days: Some(4),
-        reason: None,
-        confirmed_at: None,
-    }
-}
-
-fn source(name: SourceName, status: SourceState) -> SourceStatus {
-    SourceStatus {
-        name,
-        status,
-        observed_at: Some(instant(9)),
-        staleness: Staleness::Fresh,
-        detail: None,
-    }
-}
-
-fn commit(sha: &str, hour: u32) -> RecentEvent {
-    RecentEvent {
-        sha: sha.to_string(),
-        committed_at: instant(hour),
-        subject: format!("commit {sha}"),
-        outcome: None,
-    }
-}
-
-fn beads() -> BeadsSummary {
-    let mut blocked = item("podras-blocked", Some(1));
-    blocked.blocked_by = vec!["podras-a".to_string()];
-
-    let open = vec![
-        item("podras-b", Some(2)),
-        item("podras-a", None),
-        item("podras-c", Some(1)),
-        item("podras-d", Some(2)),
-        item("podras-parked-event", Some(0)),
-        item("podras-parked-old", Some(3)),
-        item("podras-parked-date", None),
-    ];
-
-    let ready = vec![
-        item("podras-parked-event", Some(0)),
-        item("podras-ready-late", Some(7)),
-        item("podras-c", Some(1)),
-        item("podras-ready-none", None),
-    ];
-
-    BeadsSummary {
-        open,
-        blocked: vec![blocked],
-        ready,
-        observed_at: Some(instant(9)),
-    }
-}
-
-fn git() -> GitSummary {
-    let recent = vec![
-        commit("b2", 10),
-        commit("a1", 10),
-        commit("c0", 11),
-        commit("d9", 8),
-        commit("e1", 9),
-        commit("f1", 7),
-        commit("a0", 6),
-    ];
-    GitSummary {
-        head_sha: Some("head123".to_string()),
-        recent,
-        observed_at: Some(instant(9)),
-    }
-}
-
-fn specs() -> SpecSummary {
-    SpecSummary {
-        changes: Vec::new(),
-        stale_count: 0,
-        observed_at: Some(instant(9)),
-    }
-}
-
-fn whisper() -> WhisperReading {
-    WhisperReading {
-        observed_at: Some(instant(9)),
-        next_action: Some("pick up podras-a".to_string()),
-        content_hash: None,
-    }
-}
-
-fn curation() -> CurationFile {
-    CurationFile {
-        purpose_lite: Some("podras: status read path for a cold return".to_string()),
-        max_focus: Some(1),
-        publish_whisper: Some(false),
-        health: Some(CurationHealth {
-            status: "green".to_string(),
-            owner: Some("@sasha".to_string()),
-            confirmed_at: Some("2026-11-18".to_string()),
-            reason: Some("v1 kickoff".to_string()),
-        }),
-        focus: vec![
-            FocusEntry {
-                id: "podras-c".to_string(),
-                reason: Some("read path".to_string()),
-                focused_since: Some("2026-11-01".to_string()),
-                confirmed_at: Some("2026-11-18".to_string()),
-            },
-            FocusEntry {
-                id: "podras-second".to_string(),
-                reason: Some("older focus".to_string()),
-                focused_since: Some("2026-10-01".to_string()),
-                confirmed_at: Some("2026-11-10".to_string()),
-            },
-        ],
-        parked: vec![
-            ParkEntry {
-                id: "podras-parked-event".to_string(),
-                reason: "harvest is v1.1".to_string(),
-                resurface: "event:value-prop-roadmap".to_string(),
-                parked_at: Some("2026-11-10".to_string()),
-                confirmed_at: Some("2026-11-10".to_string()),
-            },
-            ParkEntry {
-                id: "podras-parked-old".to_string(),
-                reason: "revisit after release".to_string(),
-                resurface: "2026-11-01".to_string(),
-                parked_at: Some("2026-10-01".to_string()),
-                confirmed_at: Some("2026-10-01".to_string()),
-            },
-            ParkEntry {
-                id: "podras-parked-date".to_string(),
-                reason: "triggered while away".to_string(),
-                resurface: "2026-11-17".to_string(),
-                parked_at: Some("2026-11-02".to_string()),
-                confirmed_at: Some("2026-11-02".to_string()),
-            },
-        ],
-    }
-}
-
-fn sources() -> Vec<SourceStatus> {
-    vec![
-        source(SourceName::Curation, SourceState::Present),
-        source(SourceName::Whisper, SourceState::Missing),
-        source(SourceName::Beads, SourceState::Present),
-        source(SourceName::Openspec, SourceState::Missing),
-        source(SourceName::Git, SourceState::Present),
-    ]
-}
-
-fn warnings() -> Vec<Warning> {
-    vec![
-        Warning {
-            source: SourceName::Git,
-            code: "git_unreadable".to_string(),
-            detail: "no HEAD".to_string(),
-        },
-        Warning {
-            source: SourceName::Beads,
-            code: "beads_parse_error".to_string(),
-            detail: "line z".to_string(),
-        },
-        Warning {
-            source: SourceName::Beads,
-            code: "beads_parse_error".to_string(),
-            detail: "line a".to_string(),
-        },
-    ]
-}
-
-fn inputs(generated_at: DateTime<Utc>) -> BriefInputs {
-    BriefInputs {
-        beads: Some(beads()),
-        git: Some(git()),
-        specs: Some(specs()),
-        whisper: Some(whisper()),
-        curation: Some(CurationState {
-            curation: curation(),
-            updated_at: Some(instant(8)),
-        }),
-        sources: sources(),
-        warnings: warnings(),
-        as_of: Some(day("2026-11-18")),
-        now: day("2026-11-01"),
-        generated_at,
-    }
-}
+use serde_json::Value;
 
 fn ids(items: &[WorkItem]) -> Vec<&str> {
     items.iter().map(|item| item.id.as_str()).collect()
 }
 
-fn assert_payload_ignores_volatile(first: &podras::model::Brief, second: &podras::model::Brief) {
+fn assert_payload_ignores_volatile(first: &Brief, second: &Brief) {
     let payload_a = semantic_payload(first);
     let payload_b = semantic_payload(second);
     assert_eq!(payload_a, payload_b, "semantic payloads must match");
@@ -252,7 +54,7 @@ fn assert_payload_ignores_volatile(first: &podras::model::Brief, second: &podras
     );
 }
 
-fn assert_section_order(first: &podras::model::Brief) {
+fn assert_section_order(first: &Brief) {
     assert_eq!(
         ids(&first.in_flight),
         ["podras-c", "podras-b", "podras-d", "podras-a"]
@@ -276,7 +78,7 @@ fn assert_section_order(first: &podras::model::Brief) {
     );
 }
 
-fn assert_focus_and_truncation(first: &podras::model::Brief) {
+fn assert_focus_and_truncation(first: &Brief) {
     assert_eq!(first.focus.len(), 1);
     assert_eq!(first.focus[0].id, "podras-second");
     assert_eq!(first.focus[0].confirmed_at, Some(day("2026-11-10")));
@@ -286,7 +88,7 @@ fn assert_focus_and_truncation(first: &podras::model::Brief) {
     assert!(!first.truncation.omitted_counts.contains_key("blocked"));
 }
 
-fn assert_evidence(first: &podras::model::Brief) {
+fn assert_evidence(first: &Brief) {
     assert_eq!(
         first.sources.iter().map(|row| row.name).collect::<Vec<_>>(),
         [
@@ -340,4 +142,114 @@ fn determinism_payload() {
     assert_section_order(&first);
     assert_focus_and_truncation(&first);
     assert_evidence(&first);
+}
+
+/// Every source sits exactly on its freshness horizon, so all stay fresh.
+fn assert_boundary_freshness(data: &Value) {
+    for source in ["beads", "git", "openspec", "whisper", "curation"] {
+        assert_eq!(
+            source_row(data, source)["staleness"],
+            "fresh",
+            "{source} sits exactly on its horizon: {}",
+            source_row(data, source)
+        );
+    }
+}
+
+/// The human verdict is fresh and the boundary resurface trigger fires.
+fn assert_boundary_health(data: &Value) {
+    assert_eq!(
+        data["health"]["basis"], "human",
+        "a human verdict exactly on its horizon is fresh: {}",
+        data["health"]
+    );
+    assert_eq!(
+        data["health"]["signals"]
+            .as_array()
+            .expect("signals is an array")
+            .iter()
+            .map(|signal| signal["kind"].clone())
+            .collect::<Vec<_>>(),
+        vec![Value::String("parked_expired".to_string())],
+        "the resurface trigger exactly on the pinned date fires: {}",
+        data["health"]
+    );
+    assert_eq!(
+        data["needs_retriage"][0]["id"], "podras-parked",
+        "the trigger moves the item out of parked: {}",
+        data["needs_retriage"]
+    );
+    assert!(
+        data["parked"]
+            .as_array()
+            .expect("parked is an array")
+            .is_empty(),
+        "the boundary trigger is expired, not parked: {}",
+        data["parked"]
+    );
+}
+
+/// Two `--write` runs at the same `--as-of` differ only in `generated_at`.
+fn assert_writes_are_reproducible(repo: &common::TempRepo) {
+    podras_in(repo, &["brief", "--write", "--as-of", BOUNDARY_AS_OF]).success();
+    let first_markdown = repo.read("BRIEF.md");
+    let first_render: Value = read_json(repo, "BRIEF.json");
+
+    podras_in(repo, &["brief", "--write", "--as-of", BOUNDARY_AS_OF]).success();
+    let second_markdown = repo.read("BRIEF.md");
+    let second_render: Value = read_json(repo, "BRIEF.json");
+
+    assert_eq!(
+        strip_generated_at(first_render),
+        strip_generated_at(second_render),
+        "two --write runs at the same --as-of differ only in generated_at"
+    );
+    assert!(
+        first_markdown.contains("Freshness: generated_at "),
+        "the render carries the freshness stamp: {first_markdown}"
+    );
+    assert_eq!(
+        normalize_freshness_stamp(&first_markdown),
+        normalize_freshness_stamp(&second_markdown),
+        "two BRIEF.md renders differ only in the stamp generated_at"
+    );
+}
+
+/// An unparseable `--as-of` exits 2 and writes neither render.
+fn assert_unparseable_as_of_writes_nothing() {
+    let invalid = common::TempRepo::new();
+    podras_in(&invalid, &["brief", "--write", "--as-of", "2026-13-40"])
+        .failure()
+        .code(2);
+    assert!(
+        !invalid.root().join("BRIEF.md").exists(),
+        "an unparseable --as-of writes no BRIEF.md"
+    );
+    assert!(
+        !invalid.root().join("BRIEF.json").exists(),
+        "an unparseable --as-of writes no BRIEF.json"
+    );
+}
+
+#[test]
+fn as_of_reproducible_render() {
+    let repo = boundary_fixture();
+
+    let first = brief_json_at(&repo, BOUNDARY_AS_OF);
+    assert_eq!(first["ok"].as_bool(), Some(true), "{first}");
+    let data = &first["data"];
+
+    // The pinned date decides freshness, not the wall clock.
+    assert_boundary_freshness(data);
+    assert_boundary_health(data);
+
+    let second = brief_json_at(&repo, BOUNDARY_AS_OF);
+    assert_eq!(
+        strip_generated_at(first.clone()),
+        strip_generated_at(second),
+        "two --json runs at the same --as-of differ only in generated_at"
+    );
+
+    assert_writes_are_reproducible(&repo);
+    assert_unparseable_as_of_writes_nothing();
 }

@@ -69,6 +69,12 @@ fn ids(items: &[podras::model::WorkItem]) -> Vec<&str> {
     items.iter().map(|item| item.id.as_str()).collect()
 }
 
+/// Run a `podras park` invocation clap must reject and return its stderr.
+fn clap_stderr(repo: &common::TempRepo, args: &[&str]) -> String {
+    let output = podras_in(repo, args).code(2).get_output().stderr.clone();
+    String::from_utf8(output).expect("clap errors are UTF-8")
+}
+
 fn today() -> String {
     Utc::now().date_naive().format("%Y-%m-%d").to_string()
 }
@@ -110,8 +116,25 @@ fn park_expired_surfaces() {
 fn park_requires_reason_and_resurface() {
     let repo = common::TempRepo::new();
 
-    podras_in(&repo, &["park", "podras-a", "--resurface", "2026-12-01"]).code(2);
-    podras_in(&repo, &["park", "podras-a", "--reason", "later"]).code(2);
+    let missing_reason = clap_stderr(&repo, &["park", "podras-a", "--resurface", "2026-12-01"]);
+    assert!(
+        missing_reason.contains("--reason <REASON>"),
+        "clap must name the missing flag: {missing_reason}"
+    );
+    assert!(
+        missing_reason.contains("required arguments"),
+        "clap must report a missing required argument: {missing_reason}"
+    );
+
+    let missing_resurface = clap_stderr(&repo, &["park", "podras-a", "--reason", "later"]);
+    assert!(
+        missing_resurface.contains("--resurface <RESURFACE>"),
+        "clap must name the missing flag: {missing_resurface}"
+    );
+    assert!(
+        missing_resurface.contains("required arguments"),
+        "clap must report a missing required argument: {missing_resurface}"
+    );
 }
 
 #[test]
@@ -246,6 +269,32 @@ fn park_rejects_malformed_trigger_without_rewriting() {
         before,
         "a rejected trigger leaves the curation bytes untouched"
     );
+}
+
+#[test]
+fn park_rejects_unresolved_ids_without_rewriting() {
+    let repo = common::TempRepo::new();
+    repo.beads_jsonl(&[
+        ("podras-a", "open work", "open"),
+        ("podras-b", "closed work", "closed"),
+    ]);
+    repo.curation(FOCUSED_CURATION);
+
+    for id in ["podras-zzz", "podras-b"] {
+        podras_in(
+            &repo,
+            &["park", id, "--reason", "later", "--resurface", "2026-12-01"],
+        )
+        .code(1)
+        .stderr(predicates::str::contains("park_unresolved"))
+        .stderr(predicates::str::contains("run bd list"));
+
+        assert_eq!(
+            repo.read(".podras/curation.toml"),
+            FOCUSED_CURATION,
+            "parking `{id}` must fail before mutating curation"
+        );
+    }
 }
 
 #[test]

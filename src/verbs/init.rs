@@ -94,14 +94,31 @@ pub fn run(repo: &Path) -> Result<()> {
 ///
 /// Returns `true` when the file was created. Existing bytes are never touched:
 /// curation is human-owned, and init is not a formatter.
+///
+/// The template is staged in a sibling temp file and hard-linked into place.
+/// `link` refuses to replace an existing directory entry, so a concurrent
+/// writer that lands first keeps its bytes and the failure surfaces as
+/// `AlreadyExists`. Linking also means a crash can only leave the staging file
+/// behind; `curation.toml` never exists partially written, so a later run
+/// cannot mistake a torn template for human-authored curation.
 fn scaffold_curation(repo: &Path) -> Result<bool> {
     let path = repo.join(curation::CURATION_REL_PATH);
-    if path.exists() {
-        return Ok(false);
+    let dir = repo.join(".podras");
+    fs::create_dir_all(&dir)?;
+    let staged = dir.join(format!(
+        ".curation.toml.scaffold.{}.tmp",
+        std::process::id()
+    ));
+    fs::write(&staged, CURATION_TEMPLATE).inspect_err(|_| {
+        let _ = fs::remove_file(&staged);
+    })?;
+    let linked = fs::hard_link(&staged, &path);
+    let _ = fs::remove_file(&staged);
+    match linked {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(error) => Err(error.into()),
     }
-    fs::create_dir_all(repo.join(".podras"))?;
-    fs::write(&path, CURATION_TEMPLATE)?;
-    Ok(true)
 }
 
 /// Inject or refresh the PODRAS block, returning an action only if bytes moved.

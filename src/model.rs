@@ -49,17 +49,23 @@ pub enum SourceName {
 }
 
 impl SourceName {
-    /// Fixed declaration order: beads, git, openspec, whisper, curation.
+    /// Every declared source exactly once, in fixed declaration order.
     ///
-    /// Sources and warnings both sort by this order so two runs over identical
-    /// inputs emit identical rows.
-    pub const DECLARED: [SourceName; 5] = [
+    /// Freshness threshold coverage tests read this array, so a new variant
+    /// without a declared horizon is visible to them.
+    pub const ALL: [SourceName; 5] = [
         SourceName::Beads,
         SourceName::Git,
         SourceName::Openspec,
         SourceName::Whisper,
         SourceName::Curation,
     ];
+
+    /// Fixed declaration order: beads, git, openspec, whisper, curation.
+    ///
+    /// Sources and warnings both sort by this order so two runs over identical
+    /// inputs emit identical rows.
+    pub const DECLARED: [SourceName; 5] = SourceName::ALL;
 
     /// Index of this source in the fixed declaration order.
     pub fn declaration_order(self) -> usize {

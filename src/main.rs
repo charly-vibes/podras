@@ -29,6 +29,8 @@ struct Cli {
 enum Command {
     /// Render the project status brief.
     Brief(BriefArgs),
+    /// Surface mismatch candidates without changing any state.
+    Harvest(HarvestArgs),
     /// Select the curated focus item.
     Focus {
         /// Issue id to focus.
@@ -51,6 +53,19 @@ struct BriefArgs {
     #[arg(long)]
     write: bool,
     /// Pin the observation instant (YYYY-MM-DD).
+    #[arg(long, value_parser = clap::value_parser!(chrono::NaiveDate))]
+    as_of: Option<chrono::NaiveDate>,
+    /// Directory for the render pair; requires `--write`.
+    #[arg(long, requires = "write")]
+    out_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct HarvestArgs {
+    /// Emit the typed JSON envelope.
+    #[arg(long)]
+    json: bool,
+    /// Pin the evaluation date (YYYY-MM-DD).
     #[arg(long, value_parser = clap::value_parser!(chrono::NaiveDate))]
     as_of: Option<chrono::NaiveDate>,
 }
@@ -85,7 +100,18 @@ fn run(cli: Cli) -> miette::Result<()> {
     match cli.command {
         Command::Brief(args) => {
             let repo = repository()?;
-            podras::commands::brief(&repo, args.json, args.write, args.as_of).map_err(into_report)
+            podras::commands::brief(
+                &repo,
+                args.json,
+                args.write,
+                args.as_of,
+                args.out_dir.as_deref(),
+            )
+            .map_err(into_report)
+        }
+        Command::Harvest(args) => {
+            let repo = repository()?;
+            podras::commands::harvest(&repo, args.json, args.as_of).map_err(into_report)
         }
         Command::Focus { id } => {
             let repo = repository()?;

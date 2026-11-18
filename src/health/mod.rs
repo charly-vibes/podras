@@ -72,7 +72,15 @@ pub fn evaluate(inputs: &BriefInputs) -> Health {
         .and_then(|state| state.curation.health.as_ref());
     let signals = signals(inputs);
     let mut warnings = Vec::new();
-    layer(curation_health, evaluation_date, signals, &mut warnings)
+    let impaired_mandatory = crate::freshness::impaired_mandatory(&inputs.sources);
+    layer(
+        curation_health,
+        evaluation_date,
+        signals,
+        &impaired_mandatory,
+        &inputs.sources,
+        &mut warnings,
+    )
 }
 
 /// True when `date` is strictly more than the signal horizon before `evaluation`.

@@ -121,10 +121,13 @@ pub fn assemble(inputs: &BriefInputs) -> Brief {
     let sections = sections::computed(focus, inputs, parking, &focus_ids);
     let (sections, truncation) = ordering::apply_bounds(sections);
     let signals = crate::health::signals(inputs);
+    let impaired_mandatory = crate::freshness::impaired_mandatory(&inputs.sources);
     let health = health::resolve_health(
         curation.and_then(|curation| curation.health.as_ref()),
         evaluation_date,
         signals,
+        &impaired_mandatory,
+        &inputs.sources,
         &mut warnings,
     );
     ordering::sort_warnings(&mut warnings);

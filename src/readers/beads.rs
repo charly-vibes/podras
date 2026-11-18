@@ -65,17 +65,17 @@ struct RawMetadata {
 
 /// Read the beads export for the repository.
 ///
+/// `evaluation_date` is the run's single evaluation date, used for item ages.
 /// A missing export is reported as `missing` with a `beads_missing` warning;
 /// unparseable rows are skipped and counted into one `beads_parse_error`
 /// warning while the source stays `present`.
-pub fn read(context: &ReadContext) -> SourceRead<BeadsSummary> {
+pub fn read(context: &ReadContext, evaluation_date: NaiveDate) -> SourceRead<BeadsSummary> {
     let path = context.repo_root.join(ISSUES_PATH);
     let text = match load_export(&path) {
         Ok(text) => text,
         Err(reading) => return *reading,
     };
 
-    let evaluation_date = context.as_of.unwrap_or_else(|| Utc::now().date_naive());
     let (issues, skipped) = parse_issues(&text);
     let classified = classify(&issues, evaluation_date);
     // An empty or timestamp-free export still has an observation instant: the

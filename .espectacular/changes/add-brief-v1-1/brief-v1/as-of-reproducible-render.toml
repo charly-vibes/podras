@@ -1,0 +1,9 @@
+id = "as-of-reproducible-render"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "as_of_reproducible_render" }]

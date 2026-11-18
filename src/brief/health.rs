@@ -3,23 +3,33 @@
 //! Responsibilities:
 //! - accept only fresh, valid human verdicts;
 //! - warn on unparseable status values;
+//! - pass impaired mandatory sources into the verdict layer;
 //! - fall back through signals, then unknown, when no fresh verdict exists.
 //!
 //! Rationale: silence is not green. This hook keeps the human layer explicit
 //! while `crate::health` owns the approved D8 order: fresh human verdict,
 //! then computed signals, then unknown. Signals always travel with the verdict
-//! that they influenced.
+//! that they influenced, and unusable mandatory evidence vetoes green.
 
 use chrono::NaiveDate;
 
 use crate::curation::CurationHealth;
-use crate::model::{Health, Signal, Warning};
+use crate::model::{Health, Signal, SourceName, SourceStatus, Warning};
 
 pub(super) fn resolve_health(
     health: Option<&CurationHealth>,
     evaluation_date: NaiveDate,
     signals: Vec<Signal>,
+    impaired_mandatory: &[SourceName],
+    sources: &[SourceStatus],
     warnings: &mut Vec<Warning>,
 ) -> Health {
-    crate::health::layer(health, evaluation_date, signals, warnings)
+    crate::health::layer(
+        health,
+        evaluation_date,
+        signals,
+        impaired_mandatory,
+        sources,
+        warnings,
+    )
 }

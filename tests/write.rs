@@ -1,13 +1,18 @@
-//! Purpose: prove `brief --write` overwrites hand edits and keeps whisper private.
+//! Purpose: prove `brief --write` overwrites hand edits, reports its output, and
+//! keeps whisper private.
 //!
 //! Responsibilities:
 //! - `hand_edit_render_overwritten`: regenerated artifacts replace manual edits;
 //! - `whisper_privacy`: whisper next actions never enter committed artifacts
-//!   unless `publish_whisper` is enabled, and never enter `BRIEF.json`.
+//!   unless `publish_whisper` is enabled, and never enter `BRIEF.json`;
+//! - `write_reports_written_paths`: `--write` prints the paths it wrote instead
+//!   of the narrative, while `--json --write` prints the envelope;
+//! - `failed_pair_write_keeps_previous_render`: an unwritable artifact leaves the
+//!   previous render pair untouched and exits non-zero.
 //!
 //! Rationale: committed renders are generated, not authored, so overwrite
-//! semantics and whisper privacy are the two properties users must be able to
-//! trust without reading the writer.
+//! semantics, whisper privacy, and all-or-nothing replacement are the
+//! properties users must be able to trust without reading the writer.
 
 mod common;
 
@@ -163,5 +168,109 @@ fn whisper_privacy() {
     assert!(
         !repo.read("BRIEF.json").contains(SECRET),
         "the private next action never enters BRIEF.json, even when published"
+    );
+}
+
+/// Temp files the writer stages beside the committed artifacts.
+fn leftover_temps(repo: &common::TempRepo) -> Vec<String> {
+    std::fs::read_dir(repo.root())
+        .expect("read repository root")
+        .map(|entry| entry.expect("read directory entry").file_name())
+        .map(|name| name.to_string_lossy().into_owned())
+        .filter(|name| name.starts_with(".BRIEF") && name.ends_with(".tmp"))
+        .collect()
+}
+
+#[test]
+fn write_reports_written_paths() {
+    let repo = common::TempRepo::new();
+    whisper_fixture(&repo, false);
+
+    let printed = stdout(&repo, &["brief", "--write"]);
+
+    assert_eq!(
+        printed.trim_end(),
+        "wrote BRIEF.md, BRIEF.json",
+        "`--write` reports the artifacts it committed"
+    );
+    assert!(
+        !printed.contains("Re-entry:"),
+        "`--write` prints no narrative: {printed}"
+    );
+    assert!(
+        !printed.contains(OBSERVED),
+        "`--write` prints no freshness stamp from the committed render: {printed}"
+    );
+    assert!(
+        repo.root().join("BRIEF.md").is_file() && repo.root().join("BRIEF.json").is_file(),
+        "`--write` commits both artifacts"
+    );
+}
+
+#[test]
+fn json_write_prints_envelope_and_writes_both() {
+    let repo = common::TempRepo::new();
+    whisper_fixture(&repo, false);
+
+    let printed = stdout(&repo, &["brief", "--json", "--write"]);
+    let envelope: Value =
+        serde_json::from_str(printed.trim()).expect("`--json --write` prints the envelope");
+
+    assert_eq!(
+        envelope["data"]["schema_version"].as_str(),
+        Some("brief.v1"),
+        "`--json --write` still prints the typed payload: {envelope}"
+    );
+    assert!(
+        repo.root().join("BRIEF.md").is_file() && repo.root().join("BRIEF.json").is_file(),
+        "`--json --write` commits both artifacts"
+    );
+    assert_eq!(
+        normalize_json(&printed),
+        normalize_json(&repo.read("BRIEF.json")),
+        "the printed envelope and the committed JSON agree modulo generated_at"
+    );
+}
+
+#[test]
+fn failed_pair_write_keeps_previous_render() {
+    let repo = common::TempRepo::new();
+    whisper_fixture(&repo, false);
+
+    podras_in(&repo, &["brief", "--write"]).success();
+    // A sentinel distinguishes the previous render from a fresh one regardless
+    // of how fast the two runs follow each other.
+    let previous_markdown = format!("{}\nPAIR-WRITE-SENTINEL\n", repo.read("BRIEF.md"));
+    repo.write("BRIEF.md", &previous_markdown);
+
+    // A directory where BRIEF.json must land cannot be replaced by a rename, so
+    // the pair write must fail before the markdown target is touched.
+    std::fs::remove_file(repo.root().join("BRIEF.json")).expect("remove the committed JSON");
+    std::fs::create_dir(repo.root().join("BRIEF.json")).expect("block the JSON target");
+
+    let failure = podras_in(&repo, &["brief", "--write"])
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(failure).expect("podras diagnostics are UTF-8");
+
+    assert!(
+        stderr.contains("io error"),
+        "an unwritable artifact fails with an io diagnostic: {stderr}"
+    );
+    assert_eq!(
+        repo.read("BRIEF.md"),
+        previous_markdown,
+        "a failed pair write leaves the previous markdown render byte-identical"
+    );
+    assert!(
+        repo.root().join("BRIEF.json").is_dir(),
+        "the unwritable target is left as it was found"
+    );
+    assert!(
+        leftover_temps(&repo).is_empty(),
+        "a failed pair write removes every staged temp file: {:?}",
+        leftover_temps(&repo)
     );
 }

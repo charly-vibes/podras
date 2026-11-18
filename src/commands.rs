@@ -15,6 +15,7 @@ use std::process::Command;
 use chrono::NaiveDate;
 
 use crate::error::Result;
+use crate::model::Brief;
 use crate::readers::{self, ReadContext};
 
 /// Render the brief for the repository.
@@ -22,36 +23,106 @@ use crate::readers::{self, ReadContext};
 /// Degraded sources are values, not failures: every source (present, missing,
 /// or unreadable) still produces a row and the command exits 0. Only a write
 /// failure or an unusable render is a hard error.
-pub fn brief(repo: &Path, json: bool, write: bool, as_of: Option<NaiveDate>) -> Result<()> {
-    let context = ReadContext {
-        repo_root: repo.to_path_buf(),
-        as_of,
-        branch: current_branch(repo),
-    };
-    let inputs = readers::collect(&context)?;
+///
+/// Output: the narrative by default, the envelope with `--json`; `--write`
+/// commits both artifacts into `out_dir` (the repository root unless supplied)
+/// and prints their names instead of the narrative, or the envelope when
+/// `--json` is also set.
+pub fn brief(
+    repo: &Path,
+    json: bool,
+    write: bool,
+    as_of: Option<NaiveDate>,
+    out_dir: Option<&Path>,
+) -> Result<()> {
+    let inputs = readers::collect(&read_context(repo, as_of))?;
     let brief = crate::brief::assemble(&inputs);
+    let reentry = inputs
+        .whisper
+        .as_ref()
+        .and_then(|whisper| whisper.next_action.as_deref());
+    emit_brief(repo, &brief, reentry, json, write, out_dir)
+}
+
+/// Emit the brief: envelope, write report, or narrative, in that precedence.
+fn emit_brief(
+    repo: &Path,
+    brief: &Brief,
+    reentry: Option<&str>,
+    json: bool,
+    write: bool,
+    out_dir: Option<&Path>,
+) -> Result<()> {
+    let target = out_dir.unwrap_or(repo);
+    if write {
+        crate::write::write_renders_to(repo, target, brief, reentry)?;
+    }
+    if json {
+        return print_envelope(brief);
+    }
+    if write {
+        return print_written(out_dir.is_some(), target);
+    }
+    print_narrative(brief, reentry)
+}
+
+/// Print the brief envelope, trimming the trailing newline.
+fn print_envelope(brief: &Brief) -> Result<()> {
+    println!("{}", crate::render::envelope::to_json(brief)?.trim_end());
+    Ok(())
+}
+
+/// Print the names of the two written artifacts.
+fn print_written(named: bool, target: &Path) -> Result<()> {
+    if named {
+        println!(
+            "wrote {}, {}",
+            target.join(crate::write::MARKDOWN_FILE).display(),
+            target.join(crate::write::JSON_FILE).display()
+        );
+    } else {
+        println!(
+            "wrote {}, {}",
+            crate::write::MARKDOWN_FILE,
+            crate::write::JSON_FILE
+        );
+    }
+    Ok(())
+}
+
+/// Print the human narrative.
+fn print_narrative(brief: &Brief, reentry: Option<&str>) -> Result<()> {
+    let narrative = crate::render::markdown::render(brief, reentry)?;
+    println!("{}", narrative.trim_end());
+    Ok(())
+}
+
+/// Harvest mismatch candidates without writing curation or tracker state.
+///
+/// Degraded sources are values, not failures: harvest exits 0 with the same
+/// source rows and warnings as the brief. There is deliberately no `--write`,
+/// no output directory, and no curation flag: candidates are proposed, never
+/// promoted, filed, or closed.
+pub fn harvest(repo: &Path, json: bool, as_of: Option<NaiveDate>) -> Result<()> {
+    let inputs = readers::collect(&read_context(repo, as_of))?;
+    let harvest = crate::harvest::assemble(repo, &inputs);
 
     if json {
-        let envelope = crate::render::envelope::to_json(&brief)?;
-        println!("{}", envelope.trim_end());
+        println!("{}", crate::harvest::to_json(&harvest)?.trim_end());
     } else {
-        let reentry = inputs
-            .whisper
-            .as_ref()
-            .and_then(|whisper| whisper.next_action.as_deref());
-        let narrative = crate::render::markdown::render(&brief, reentry)?;
-        println!("{}", narrative.trim_end());
-    }
-
-    if write {
-        let whisper_next_action = inputs
-            .whisper
-            .as_ref()
-            .and_then(|whisper| whisper.next_action.as_deref());
-        crate::write::write_renders(repo, &brief, whisper_next_action)?;
+        println!("{}", crate::harvest::render(&harvest).trim_end());
     }
 
     Ok(())
+}
+
+/// Build the read context for one run.
+fn read_context(repo: &Path, as_of: Option<NaiveDate>) -> ReadContext {
+    ReadContext {
+        repo_root: repo.to_path_buf(),
+        as_of,
+        branch: current_branch(repo),
+    }
 }
 
 /// Resolve the current branch name without failing the brief.

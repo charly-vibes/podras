@@ -20,6 +20,7 @@ use chrono::Utc;
 use podras::brief::{BriefInputs, CurationState, assemble};
 use podras::curation::{self, CurationFile, FocusEntry};
 use podras::model::{HealthStatus, SignalKind};
+use podras::readers::{self, ReadContext};
 use predicates::prelude::*;
 
 fn podras_in(repo: &common::TempRepo, args: &[&str]) -> assert_cmd::assert::Assert {
@@ -47,6 +48,17 @@ fn today() -> String {
 
 fn day(raw: &str) -> chrono::NaiveDate {
     chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d").expect("fixture date is valid")
+}
+
+/// Collect every source in the fixture and assemble the brief.
+fn brief_of(repo: &common::TempRepo) -> podras::model::Brief {
+    let context = ReadContext {
+        repo_root: repo.root().to_path_buf(),
+        as_of: None,
+        branch: None,
+    };
+    let inputs = readers::collect(&context).expect("collect sources for the brief");
+    assemble(&inputs)
 }
 
 /// Inputs whose curation holds two focus rows against a cap of one.
@@ -209,6 +221,51 @@ fn same_id_refresh_keeps_one() {
     assert_eq!(
         curation.focus[0].confirmed_at.as_deref(),
         Some(today().as_str())
+    );
+}
+
+#[test]
+fn focusing_parked_id_unparks_it() {
+    let repo = common::TempRepo::new();
+    repo.beads_jsonl(&[("podras-a", "expired park", "open")]);
+    repo.curation(&curation_with(
+        1,
+        "[[parked]]\nid = \"podras-a\"\nreason = \"ran out of time\"\n\
+         resurface = \"2020-01-01\"\nparked_at = \"2019-12-01\"\nconfirmed_at = \"2019-12-01\"\n",
+    ));
+
+    let before = brief_of(&repo);
+    assert!(
+        before
+            .needs_retriage
+            .iter()
+            .any(|item| item.id == "podras-a"),
+        "fixture starts with an expired park: {:?}",
+        before.needs_retriage
+    );
+
+    podras_in(&repo, &["focus", "podras-a"])
+        .success()
+        .stdout(predicate::str::contains("unparked podras-a"))
+        .stdout(predicate::str::contains("focused podras-a"));
+
+    let curation = load(&repo);
+    assert!(
+        curation.parked.is_empty(),
+        "focusing a parked id removes the parked row: {:?}",
+        curation.parked
+    );
+    assert_eq!(curation.focus.len(), 1);
+    assert_eq!(curation.focus[0].id, "podras-a");
+
+    let after = brief_of(&repo);
+    assert!(
+        !after
+            .needs_retriage
+            .iter()
+            .any(|item| item.id == "podras-a"),
+        "the retriaged id no longer needs re-triage: {:?}",
+        after.needs_retriage
     );
 }
 

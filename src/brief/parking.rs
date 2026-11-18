@@ -69,6 +69,13 @@ fn resolve_entry(
     evaluation_date: NaiveDate,
     warnings: &mut Vec<Warning>,
 ) -> Option<Resolved> {
+    if entry.reason.trim().is_empty() {
+        warnings.push(curation_warning(
+            "curation_invalid_entry",
+            format!("parked entry `{}` has no reason", entry.id),
+        ));
+        return None;
+    }
     let resurface = parse_resurface(entry, warnings)?;
     let (parked_at, confirmed_at) = parked_dates(entry, warnings)?;
     if is_expired(&resurface, evaluation_date) {

@@ -23,12 +23,14 @@ use crate::model::Resurface;
 pub fn run(repo: &Path, id: &str, reason: &str, resurface: &str) -> Result<()> {
     let reason = required_reason(reason)?;
     let trigger = parse_trigger(resurface)?;
+    super::resolve_open_item(repo, id, "park_unresolved")?;
     let mut curation = curation::load(repo)?.unwrap_or_default();
-    if unpark_focused(&mut curation, id) {
-        println!("unfocused {id}: a parked item never stays focused");
-    }
+    let unfocused = unpark_focused(&mut curation, id);
     upsert(&mut curation, id, reason, &trigger, &today_stamp());
     curation::save(repo, &curation)?;
+    if unfocused {
+        println!("unfocused {id}: a parked item never stays focused");
+    }
     println!("parked {id} until {trigger}");
     Ok(())
 }

@@ -8,213 +8,19 @@
 //! Rationale: health is the one place the brief is allowed to judge, so every
 //! verdict must be traceable to a named signal or an unexpired human word.
 
-use chrono::{DateTime, NaiveDate, Utc};
-use podras::brief::{
-    BeadsSummary, BriefInputs, CurationState, GitSummary, SpecSummary, WhisperReading,
+#[path = "health/fixtures.rs"]
+mod fixtures;
+
+use fixtures::{
+    Scenario, event, firing, focus_entry, human, kinds, mandatory_row, open_item, park_date,
+    park_event, spec_item, titled_open_item,
 };
-use podras::curation::{CurationFile, CurationHealth, FocusEntry, ParkEntry};
 use podras::health::{evaluate, signals};
-use podras::model::{HealthBasis, HealthStatus, RecentEvent, Signal, SignalKind, WorkItem};
-
-/// Pinned evaluation date shared by every fixture.
-const AS_OF: &str = "2026-11-18";
-
-fn day(raw: &str) -> NaiveDate {
-    NaiveDate::parse_from_str(raw, "%Y-%m-%d").expect("fixture dates are valid")
-}
-
-fn instant(date: &str, hour: u32) -> DateTime<Utc> {
-    day(date)
-        .and_hms_opt(hour, 0, 0)
-        .expect("fixture hours are valid")
-        .and_utc()
-}
-
-fn observed_at() -> Option<DateTime<Utc>> {
-    Some(instant(AS_OF, 9))
-}
-
-fn open_item(id: &str) -> WorkItem {
-    WorkItem {
-        id: id.to_string(),
-        title: Some(format!("title {id}")),
-        status: Some("open".to_string()),
-        priority: Some(2),
-        blocked_by: Vec::new(),
-        age_days: Some(3),
-        reason: None,
-        confirmed_at: None,
-    }
-}
-
-fn titled_open_item(id: &str, title: &str) -> WorkItem {
-    WorkItem {
-        title: Some(title.to_string()),
-        ..open_item(id)
-    }
-}
-
-fn spec_item(id: &str, title: &str, status: &str, age_days: Option<u32>) -> WorkItem {
-    WorkItem {
-        id: id.to_string(),
-        title: Some(title.to_string()),
-        status: Some(status.to_string()),
-        priority: None,
-        blocked_by: Vec::new(),
-        age_days,
-        reason: None,
-        confirmed_at: None,
-    }
-}
-
-fn beads(open: Vec<WorkItem>) -> Option<BeadsSummary> {
-    Some(BeadsSummary {
-        open,
-        blocked: Vec::new(),
-        ready: Vec::new(),
-        observed_at: observed_at(),
-    })
-}
-
-fn event(sha: &str, subject: &str, date: &str) -> RecentEvent {
-    RecentEvent {
-        sha: sha.to_string(),
-        committed_at: instant(date, 10),
-        subject: subject.to_string(),
-        outcome: None,
-    }
-}
-
-fn git(recent: Vec<RecentEvent>) -> Option<GitSummary> {
-    Some(GitSummary {
-        head_sha: Some("head123".to_string()),
-        recent,
-        observed_at: observed_at(),
-    })
-}
-
-fn fresh_git() -> Option<GitSummary> {
-    git(vec![event("head123", "initial commit", "2026-11-17")])
-}
-
-/// Git history whose newest commit is outside the 14-day window.
-fn quiet_git() -> Option<GitSummary> {
-    git(vec![event("old123", "initial commit", "2026-10-01")])
-}
-
-fn specs(changes: Vec<WorkItem>) -> Option<SpecSummary> {
-    Some(SpecSummary {
-        changes,
-        stale_count: 0,
-        observed_at: observed_at(),
-    })
-}
-
-fn focus_entry(id: &str, focused_since: &str, confirmed_at: &str) -> FocusEntry {
-    FocusEntry {
-        id: id.to_string(),
-        reason: Some(format!("reason for {id}")),
-        focused_since: Some(focused_since.to_string()),
-        confirmed_at: Some(confirmed_at.to_string()),
-    }
-}
-
-fn park_date(id: &str, resurface: &str) -> ParkEntry {
-    ParkEntry {
-        id: id.to_string(),
-        reason: format!("reason for {id}"),
-        resurface: resurface.to_string(),
-        parked_at: Some("2026-10-01".to_string()),
-        confirmed_at: Some("2026-10-01".to_string()),
-    }
-}
-
-fn park_event(id: &str, resurface: &str) -> ParkEntry {
-    ParkEntry {
-        id: id.to_string(),
-        reason: format!("reason for {id}"),
-        resurface: format!("event:{resurface}"),
-        parked_at: Some("2026-10-01".to_string()),
-        confirmed_at: Some("2026-10-01".to_string()),
-    }
-}
-
-fn curation(
-    health: Option<CurationHealth>,
-    max_focus: Option<usize>,
-    focus: Vec<FocusEntry>,
-    parked: Vec<ParkEntry>,
-) -> Option<CurationState> {
-    Some(CurationState {
-        curation: CurationFile {
-            purpose_lite: Some("podras: status read path for a cold return".to_string()),
-            max_focus,
-            publish_whisper: Some(false),
-            health,
-            focus,
-            parked,
-        },
-        updated_at: observed_at(),
-    })
-}
-
-fn human(status: &str, confirmed_at: &str) -> CurationHealth {
-    CurationHealth {
-        status: status.to_string(),
-        owner: Some("@sasha".to_string()),
-        confirmed_at: Some(confirmed_at.to_string()),
-        reason: Some("human note".to_string()),
-    }
-}
-
-fn inputs(
-    curation: Option<CurationState>,
-    beads: Option<BeadsSummary>,
-    git: Option<GitSummary>,
-    specs: Option<SpecSummary>,
-) -> BriefInputs {
-    BriefInputs {
-        beads,
-        git,
-        specs,
-        whisper: Some(WhisperReading {
-            observed_at: observed_at(),
-            next_action: None,
-            content_hash: None,
-        }),
-        curation,
-        sources: Vec::new(),
-        warnings: Vec::new(),
-        as_of: Some(day(AS_OF)),
-        now: day("2026-11-01"),
-        generated_at: instant(AS_OF, 12),
-    }
-}
-
-/// Inputs with no human verdict and no firing signal.
-fn quiet_inputs() -> BriefInputs {
-    inputs(
-        curation(None, Some(1), Vec::new(), Vec::new()),
-        beads(Vec::new()),
-        quiet_git(),
-        specs(Vec::new()),
-    )
-}
-
-fn kinds(signals: &[Signal]) -> Vec<SignalKind> {
-    signals.iter().map(|signal| signal.kind).collect()
-}
-
-fn firing(inputs: &BriefInputs, kind: SignalKind) -> Signal {
-    signals(inputs)
-        .into_iter()
-        .find(|signal| signal.kind == kind)
-        .unwrap_or_else(|| panic!("expected {kind:?} to fire"))
-}
+use podras::model::{HealthBasis, HealthStatus, SignalKind, SourceName, SourceState, Staleness};
 
 #[test]
 fn silence_is_unknown() {
-    let inputs = quiet_inputs();
+    let inputs = Scenario::quiet().inputs();
 
     assert!(signals(&inputs).is_empty(), "quiet fixture must not fire");
 
@@ -226,17 +32,11 @@ fn silence_is_unknown() {
 
 #[test]
 fn fresh_human_green_without_signals_is_green() {
-    let inputs = inputs(
-        curation(
-            Some(human("green", "2026-11-18")),
-            Some(1),
-            Vec::new(),
-            Vec::new(),
-        ),
-        beads(Vec::new()),
-        quiet_git(),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        verdict: Some(human("green", "2026-11-18")),
+        ..Scenario::quiet()
+    }
+    .inputs();
 
     let health = evaluate(&inputs);
     assert_eq!(health.status, HealthStatus::Green);
@@ -247,20 +47,16 @@ fn fresh_human_green_without_signals_is_green() {
 
 #[test]
 fn human_green_downgraded_by_firing_signals() {
-    let inputs = inputs(
-        curation(
-            Some(human("green", "2026-11-18")),
-            Some(1),
-            vec![
-                focus_entry("podras-a", "2026-11-01", "2026-11-18"),
-                focus_entry("podras-closed", "2026-11-01", "2026-11-18"),
-            ],
-            Vec::new(),
-        ),
-        beads(vec![open_item("podras-a")]),
-        fresh_git(),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        verdict: Some(human("green", "2026-11-18")),
+        focus: vec![
+            focus_entry("podras-a", "2026-11-01", "2026-11-18"),
+            focus_entry("podras-closed", "2026-11-01", "2026-11-18"),
+        ],
+        open: vec![open_item("podras-a")],
+        ..Scenario::fresh()
+    }
+    .inputs();
 
     let fired = signals(&inputs);
     let fired_kinds = kinds(&fired);
@@ -280,17 +76,11 @@ fn human_green_downgraded_by_firing_signals() {
 
 #[test]
 fn stale_human_verdict_is_absent() {
-    let inputs = inputs(
-        curation(
-            Some(human("green", "2026-10-01")),
-            Some(1),
-            Vec::new(),
-            Vec::new(),
-        ),
-        beads(Vec::new()),
-        quiet_git(),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        verdict: Some(human("green", "2026-10-01")),
+        ..Scenario::quiet()
+    }
+    .inputs();
 
     assert!(signals(&inputs).is_empty());
     let health = evaluate(&inputs);
@@ -300,17 +90,12 @@ fn stale_human_verdict_is_absent() {
 
 #[test]
 fn stale_focus_fires_past_horizon() {
-    let inputs = inputs(
-        curation(
-            None,
-            Some(1),
-            vec![focus_entry("podras-a", "2026-10-01", "2026-10-10")],
-            Vec::new(),
-        ),
-        beads(vec![open_item("podras-a")]),
-        fresh_git(),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        focus: vec![focus_entry("podras-a", "2026-10-01", "2026-10-10")],
+        open: vec![open_item("podras-a")],
+        ..Scenario::fresh()
+    }
+    .inputs();
 
     let signal = firing(&inputs, SignalKind::StaleFocus);
     assert!(
@@ -324,17 +109,13 @@ fn stale_focus_fires_past_horizon() {
 
 #[test]
 fn stale_focus_boundary_of_fourteen_days_is_not_stale() {
-    let inputs = inputs(
-        curation(
-            None,
-            Some(1),
-            vec![focus_entry("podras-a", "2026-11-04", "2026-11-04")],
-            Vec::new(),
-        ),
-        beads(vec![open_item("podras-a")]),
-        git(vec![event("head123", "podras-a: boundary", "2026-11-17")]),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        focus: vec![focus_entry("podras-a", "2026-11-04", "2026-11-04")],
+        open: vec![open_item("podras-a")],
+        recent: vec![event("head123", "podras-a: boundary", "2026-11-17")],
+        ..Scenario::default()
+    }
+    .inputs();
 
     assert!(
         signals(&inputs).is_empty(),
@@ -344,20 +125,16 @@ fn stale_focus_boundary_of_fourteen_days_is_not_stale() {
 
 #[test]
 fn wip_over_cap_fires_above_max_focus() {
-    let inputs = inputs(
-        curation(
-            None,
-            Some(1),
-            vec![
-                focus_entry("podras-a", "2026-11-01", "2026-11-18"),
-                focus_entry("podras-b", "2026-11-01", "2026-11-18"),
-            ],
-            Vec::new(),
-        ),
-        beads(vec![open_item("podras-a"), open_item("podras-b")]),
-        git(vec![event("head123", "podras-a: start", "2026-11-17")]),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        focus: vec![
+            focus_entry("podras-a", "2026-11-01", "2026-11-18"),
+            focus_entry("podras-b", "2026-11-01", "2026-11-18"),
+        ],
+        open: vec![open_item("podras-a"), open_item("podras-b")],
+        recent: vec![event("head123", "podras-a: start", "2026-11-17")],
+        ..Scenario::default()
+    }
+    .inputs();
 
     let signal = firing(&inputs, SignalKind::WipOverCap);
     assert!(
@@ -370,12 +147,12 @@ fn wip_over_cap_fires_above_max_focus() {
 
 #[test]
 fn stuck_project_fires_when_in_flight_and_history_is_old() {
-    let inputs = inputs(
-        curation(None, Some(1), Vec::new(), Vec::new()),
-        beads(vec![open_item("podras-a")]),
-        git(vec![event("old", "stale work", "2026-10-20")]),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        open: vec![open_item("podras-a")],
+        recent: vec![event("old", "stale work", "2026-10-20")],
+        ..Scenario::default()
+    }
+    .inputs();
 
     let signal = firing(&inputs, SignalKind::StuckProject);
     assert!(
@@ -387,17 +164,12 @@ fn stuck_project_fires_when_in_flight_and_history_is_old() {
 
 #[test]
 fn focus_closed_fires_when_focused_id_is_not_open() {
-    let inputs = inputs(
-        curation(
-            None,
-            Some(1),
-            vec![focus_entry("podras-gone", "2026-11-01", "2026-11-18")],
-            Vec::new(),
-        ),
-        beads(vec![open_item("podras-a")]),
-        fresh_git(),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        focus: vec![focus_entry("podras-gone", "2026-11-01", "2026-11-18")],
+        open: vec![open_item("podras-a")],
+        ..Scenario::fresh()
+    }
+    .inputs();
 
     let signal = firing(&inputs, SignalKind::FocusClosed);
     assert!(
@@ -409,20 +181,14 @@ fn focus_closed_fires_when_focused_id_is_not_open() {
 
 #[test]
 fn parked_expired_fires_on_past_date_but_not_on_event() {
-    let inputs = inputs(
-        curation(
-            None,
-            Some(1),
-            Vec::new(),
-            vec![
-                park_date("podras-old", "2026-11-01"),
-                park_event("podras-event", "value-prop-roadmap"),
-            ],
-        ),
-        beads(Vec::new()),
-        fresh_git(),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        parked: vec![
+            park_date("podras-old", "2026-11-01"),
+            park_event("podras-event", "value-prop-roadmap"),
+        ],
+        ..Scenario::fresh()
+    }
+    .inputs();
 
     let signal = firing(&inputs, SignalKind::ParkedExpired);
     assert!(
@@ -439,17 +205,17 @@ fn parked_expired_fires_on_past_date_but_not_on_event() {
 
 #[test]
 fn orphan_commits_fire_only_for_unlinked_window_commits() {
-    let inputs = inputs(
-        curation(None, Some(1), Vec::new(), Vec::new()),
-        beads(vec![titled_open_item("podras-a", "wire src/health.rs")]),
-        git(vec![
+    let inputs = Scenario {
+        open: vec![titled_open_item("podras-a", "wire src/health.rs")],
+        recent: vec![
             event("b2", "commit b2", "2026-11-10"),
             event("a1", "podras-a: fix health", "2026-11-11"),
             event("c0", "src/health.rs: tighten rule", "2026-11-12"),
             event("d9", "chore outside window", "2026-10-01"),
-        ]),
-        specs(Vec::new()),
-    );
+        ],
+        ..Scenario::default()
+    }
+    .inputs();
 
     let signal = firing(&inputs, SignalKind::OrphanCommits);
     assert!(
@@ -476,17 +242,17 @@ fn orphan_commits_fire_only_for_unlinked_window_commits() {
 
 #[test]
 fn spec_change_without_bead_fires_only_for_young_unlinked_changes() {
-    let inputs = inputs(
-        curation(None, Some(1), Vec::new(), Vec::new()),
-        beads(vec![open_item("podras-a")]),
-        fresh_git(),
-        specs(vec![
+    let inputs = Scenario {
+        open: vec![open_item("podras-a")],
+        changes: vec![
             spec_item("add-brief", "Brief read path", "change", Some(3)),
             spec_item("podras-d2e", "linked change", "change", Some(2)),
             spec_item("old-change", "old change", "change", Some(20)),
             spec_item("read-path", "spec document", "spec", Some(1)),
-        ]),
-    );
+        ],
+        ..Scenario::fresh()
+    }
+    .inputs();
 
     let signal = firing(&inputs, SignalKind::SpecChangeWithoutBead);
     assert!(
@@ -513,24 +279,91 @@ fn spec_change_without_bead_fires_only_for_young_unlinked_changes() {
 
 #[test]
 fn signals_without_a_human_verdict_are_amber_with_signal_basis() {
-    let inputs = inputs(
-        curation(
-            None,
-            Some(1),
-            vec![
-                focus_entry("podras-a", "2026-11-01", "2026-11-18"),
-                focus_entry("podras-b", "2026-11-01", "2026-11-18"),
-            ],
-            Vec::new(),
-        ),
-        beads(vec![open_item("podras-a"), open_item("podras-b")]),
-        fresh_git(),
-        specs(Vec::new()),
-    );
+    let inputs = Scenario {
+        focus: vec![
+            focus_entry("podras-a", "2026-11-01", "2026-11-18"),
+            focus_entry("podras-b", "2026-11-01", "2026-11-18"),
+        ],
+        open: vec![open_item("podras-a"), open_item("podras-b")],
+        ..Scenario::fresh()
+    }
+    .inputs();
 
     let health = evaluate(&inputs);
     assert_eq!(health.status, HealthStatus::Amber);
     assert_eq!(health.basis, HealthBasis::Signals);
     let reason = health.reason.as_deref().unwrap_or_default();
     assert!(reason.contains("wip_over_cap"), "reason was: {reason}");
+}
+
+/// A fresh human green over missing or stale mandatory sources is amber.
+#[test]
+fn fresh_human_green_downgraded_by_impaired_mandatory_sources() {
+    let inputs = Scenario {
+        verdict: Some(human("green", "2026-11-18")),
+        sources: vec![
+            mandatory_row(SourceName::Beads, SourceState::Missing, Staleness::Unknown),
+            mandatory_row(SourceName::Git, SourceState::Present, Staleness::Fresh),
+        ],
+        ..Scenario::quiet()
+    }
+    .inputs();
+
+    assert!(
+        signals(&inputs).is_empty(),
+        "the mandatory guard must work without a firing signal"
+    );
+    let health = evaluate(&inputs);
+    assert_eq!(health.status, HealthStatus::Amber);
+    assert_eq!(health.basis, HealthBasis::Human);
+    assert_eq!(health.owner.as_deref(), Some("@sasha"));
+    assert_eq!(
+        health.reason.as_deref(),
+        Some("human green downgraded by unusable mandatory sources: beads (missing)")
+    );
+}
+
+/// A stale mandatory source is named with its state in the downgrade reason.
+#[test]
+fn fresh_human_green_downgrade_names_a_stale_mandatory_source() {
+    let inputs = Scenario {
+        verdict: Some(human("green", "2026-11-18")),
+        sources: vec![
+            mandatory_row(SourceName::Beads, SourceState::Present, Staleness::Fresh),
+            mandatory_row(SourceName::Git, SourceState::Present, Staleness::Stale),
+        ],
+        ..Scenario::quiet()
+    }
+    .inputs();
+
+    let health = evaluate(&inputs);
+    assert_eq!(health.status, HealthStatus::Amber);
+    assert_eq!(health.basis, HealthBasis::Human);
+    assert_eq!(
+        health.reason.as_deref(),
+        Some("human green downgraded by unusable mandatory sources: git (stale)")
+    );
+}
+
+/// Fresh mandatory sources keep a signal-free fresh human green green.
+#[test]
+fn fresh_human_green_with_fresh_mandatory_sources_is_green() {
+    let inputs = Scenario {
+        verdict: Some(human("green", "2026-11-18")),
+        sources: vec![
+            mandatory_row(SourceName::Beads, SourceState::Present, Staleness::Fresh),
+            mandatory_row(SourceName::Git, SourceState::Present, Staleness::Fresh),
+            mandatory_row(SourceName::Openspec, SourceState::Present, Staleness::Fresh),
+            mandatory_row(SourceName::Whisper, SourceState::Present, Staleness::Fresh),
+            mandatory_row(SourceName::Curation, SourceState::Present, Staleness::Fresh),
+        ],
+        ..Scenario::quiet()
+    }
+    .inputs();
+
+    let health = evaluate(&inputs);
+    assert_eq!(health.status, HealthStatus::Green, "{health:?}");
+    assert_eq!(health.basis, HealthBasis::Human);
+    assert!(health.signals.is_empty());
+    assert_eq!(health.reason.as_deref(), Some("human note"));
 }

@@ -59,11 +59,16 @@ impl TempRepo {
 
     /// Run git in the fixture with fixed author/committer dates.
     pub fn git(&self, args: &[&str]) -> String {
+        self.git_at(FIXED_DATE, args)
+    }
+
+    /// Run git in the fixture with an explicit author/committer date.
+    pub fn git_at(&self, instant: &str, args: &[&str]) -> String {
         let output = Command::new("git")
             .args(args)
             .current_dir(self.root())
-            .env("GIT_AUTHOR_DATE", FIXED_DATE)
-            .env("GIT_COMMITTER_DATE", FIXED_DATE)
+            .env("GIT_AUTHOR_DATE", instant)
+            .env("GIT_COMMITTER_DATE", instant)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_TERMINAL_PROMPT", "0")
@@ -80,10 +85,42 @@ impl TempRepo {
         self.git(&["commit", "-m", message]);
     }
 
+    /// Stage everything and commit at an explicit committer date.
+    pub fn commit_at(&self, instant: &str, message: &str) {
+        self.git_at(instant, &["add", "-A"]);
+        self.git_at(instant, &["commit", "-m", message]);
+    }
+
     /// Write `.beads/issues.jsonl` from `(id, title, status)` rows.
     pub fn beads_jsonl(&self, rows: &[(&str, &str, &str)]) {
+        self.beads_jsonl_at(rows, &[], FIXED_DATE);
+    }
+
+    /// Write `.beads/issues.jsonl` with blocker edges and a chosen update instant.
+    ///
+    /// Each `(issue, blocker)` pair becomes a `blocks` dependency; a blocked
+    /// issue is only blocked while `blocker` itself remains open.
+    pub fn beads_jsonl_at(
+        &self,
+        rows: &[(&str, &str, &str)],
+        blockers: &[(&str, &str)],
+        updated_at: &str,
+    ) {
         let mut body = String::new();
         for (id, title, status) in rows {
+            let dependencies: Vec<serde_json::Value> = blockers
+                .iter()
+                .filter(|(issue, _)| issue == id)
+                .map(|(_, blocker)| {
+                    serde_json::json!({
+                        "issue_id": id,
+                        "depends_on_id": blocker,
+                        "type": "blocks",
+                        "created_at": updated_at,
+                        "created_by": "Podras Tests",
+                    })
+                })
+                .collect();
             let issue = serde_json::json!({
                 "_type": "issue",
                 "id": id,
@@ -93,12 +130,12 @@ impl TempRepo {
                 "priority": 1,
                 "issue_type": "task",
                 "owner": "podras@tests.invalid",
-                "created_at": FIXED_DATE,
+                "created_at": updated_at,
                 "created_by": "Podras Tests",
-                "updated_at": FIXED_DATE,
+                "updated_at": updated_at,
                 "metadata": {},
                 "labels": [],
-                "dependencies": [],
+                "dependencies": dependencies,
                 "comments": []
             });
             body.push_str(&serde_json::to_string(&issue).expect("serialize issue fixture"));
@@ -116,6 +153,30 @@ impl TempRepo {
     pub fn whisper_branch(&self, topic: &str, text: &str) {
         let content = format!("- {FIXED_DATE} [id:fixture] (#{topic}) Format: 1\n  {text}\n");
         self.write(&format!(".whisper/branches/{topic}/notes.md"), &content);
+    }
+
+    /// Write a whisper branch note with a `## Next action` block.
+    pub fn whisper_branch_action(&self, topic: &str, text: &str, next_action: &str) {
+        let content = format!(
+            "- {FIXED_DATE} [id:fixture] (#{topic}) Format: 1\n  {text}\n\n## Next action\n{next_action}\n"
+        );
+        self.write(&format!(".whisper/branches/{topic}/notes.md"), &content);
+    }
+
+    /// Set one file's modified time to a deterministic RFC 3339 instant.
+    pub fn set_mtime(&self, rel: &str, instant: &str) {
+        use std::time::{Duration, UNIX_EPOCH};
+
+        let parsed =
+            chrono::DateTime::parse_from_rfc3339(instant).expect("fixture mtime is RFC 3339");
+        let seconds = u64::try_from(parsed.timestamp()).expect("fixture mtime is after the epoch");
+        let stamp = UNIX_EPOCH + Duration::from_secs(seconds);
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .open(self.root().join(rel))
+            .expect("open fixture file to stamp mtime");
+        file.set_times(fs::FileTimes::new().set_modified(stamp))
+            .expect("set fixture file mtime");
     }
 
     /// Write an OpenSpec change at `openspec/changes/<name>/proposal.md`.

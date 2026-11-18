@@ -132,6 +132,55 @@ fn existing_curation_bytes_are_preserved() {
         repo.read("AGENTS.md").contains(PODRAS_START),
         "init still injects the block alongside existing curation"
     );
+
+    init(&repo).success();
+    assert_eq!(
+        repo.read(".podras/curation.toml"),
+        original,
+        "a repeat run leaves pre-existing curation byte-identical"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn existing_curation_directory_entry_is_never_replaced_or_written_through() {
+    let repo = common::TempRepo::new();
+    // A directory entry that already exists but whose target does not: the
+    // shape a concurrent or interrupted writer can leave behind. Scaffolding
+    // is create-if-absent on the entry itself, so init must neither replace the
+    // entry nor follow it and create a file at its target.
+    let curation_path = repo.root().join(".podras/curation.toml");
+    std::fs::create_dir_all(curation_path.parent().expect("curation path has a parent"))
+        .expect("create .podras");
+    std::os::unix::fs::symlink("elsewhere.toml", &curation_path).expect("plant dangling symlink");
+
+    init(&repo).success();
+
+    assert!(
+        !repo.root().join(".podras/elsewhere.toml").exists(),
+        "init must not write through an existing directory entry"
+    );
+    let meta = std::fs::symlink_metadata(&curation_path).expect("curation entry survives");
+    assert!(
+        meta.file_type().is_symlink(),
+        "the existing directory entry is preserved, not replaced"
+    );
+    let mut entries: Vec<String> = std::fs::read_dir(repo.root().join(".podras"))
+        .expect("list .podras")
+        .map(|entry| {
+            entry
+                .expect("read .podras entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    entries.sort();
+    assert_eq!(
+        entries,
+        vec!["curation.toml".to_string()],
+        "scaffolding leaves no staging residue behind"
+    );
 }
 
 #[test]

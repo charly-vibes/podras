@@ -38,6 +38,17 @@ pub struct ReadContext {
     pub branch: Option<String>,
 }
 
+impl ReadContext {
+    /// The run's single evaluation date: `--as-of` when pinned, else `now`.
+    ///
+    /// Callers sample `now` once per run and thread the result through every
+    /// reader and freshness judgement, so a run that crosses midnight never
+    /// measures two sources against different days.
+    pub fn evaluation_date(&self, now: NaiveDate) -> NaiveDate {
+        self.as_of.unwrap_or(now)
+    }
+}
+
 /// One source read: typed payload plus its declared status and warnings.
 ///
 /// `data` is `None` when the source was missing or unreadable; the status row
@@ -56,17 +67,19 @@ pub struct SourceRead<T> {
 ///
 /// Rows are accumulated in the fixed declaration order (beads, git, openspec,
 /// whisper, curation) and each row's staleness is judged from its own
-/// observation instant. No source failure is propagated: readers are already
-/// infallible, and curation load failures become an `unreadable` row with
-/// in-memory defaults so the brief still renders.
+/// observation instant against one evaluation date computed here for the whole
+/// run. No source failure is propagated: readers are already infallible, and
+/// curation load failures become an `unreadable` row with in-memory defaults so
+/// the brief still renders.
 pub fn collect(context: &ReadContext) -> Result<BriefInputs> {
     let generated_at = Utc::now();
+    let evaluation_date = context.evaluation_date(generated_at.date_naive());
     let mut sources = Vec::with_capacity(SourceName::DECLARED.len());
     let mut warnings = Vec::new();
-    let loaded = load_sources(context, &mut sources, &mut warnings);
+    let loaded = load_sources(context, evaluation_date, &mut sources, &mut warnings);
     let curation = record_curation(
         &context.repo_root,
-        context.as_of,
+        evaluation_date,
         &mut sources,
         &mut warnings,
     );
@@ -95,21 +108,32 @@ struct Loaded {
 /// Read the four content sources in declaration order, recording their rows.
 fn load_sources(
     context: &ReadContext,
+    evaluation_date: NaiveDate,
     sources: &mut Vec<SourceStatus>,
     warnings: &mut Vec<Warning>,
 ) -> Loaded {
     Loaded {
-        beads: record(beads::read(context), context.as_of, sources, warnings),
-        git: record(git::read(context), context.as_of, sources, warnings),
-        specs: record(specs::read(context), context.as_of, sources, warnings),
-        whisper: record(whisper::read(context), context.as_of, sources, warnings),
+        beads: record(
+            beads::read(context, evaluation_date),
+            evaluation_date,
+            sources,
+            warnings,
+        ),
+        git: record(git::read(context), evaluation_date, sources, warnings),
+        specs: record(
+            specs::read(context, evaluation_date),
+            evaluation_date,
+            sources,
+            warnings,
+        ),
+        whisper: record(whisper::read(context), evaluation_date, sources, warnings),
     }
 }
 
 /// Push one reader outcome into the source rows and warnings, returning its data.
 fn record<T>(
     read: SourceRead<T>,
-    as_of: Option<NaiveDate>,
+    evaluation_date: NaiveDate,
     sources: &mut Vec<SourceStatus>,
     warnings: &mut Vec<Warning>,
 ) -> Option<T> {
@@ -118,7 +142,7 @@ fn record<T>(
         mut status,
         warnings: read_warnings,
     } = read;
-    status.staleness = freshness::evaluate(status.name, status.observed_at, as_of);
+    status.staleness = freshness::evaluate_at(status.name, status.observed_at, evaluation_date);
     sources.push(status);
     warnings.extend(read_warnings);
     data
@@ -131,12 +155,12 @@ fn record<T>(
 /// tell the reader that the human state was unavailable.
 fn record_curation(
     repo_root: &Path,
-    as_of: Option<NaiveDate>,
+    evaluation_date: NaiveDate,
     sources: &mut Vec<SourceStatus>,
     warnings: &mut Vec<Warning>,
 ) -> Option<CurationState> {
     let (state, mut status, read_warnings) = curation_outcome(repo_root);
-    status.staleness = freshness::evaluate(status.name, status.observed_at, as_of);
+    status.staleness = freshness::evaluate_at(status.name, status.observed_at, evaluation_date);
     sources.push(status);
     warnings.extend(read_warnings);
     state

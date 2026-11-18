@@ -12,62 +12,14 @@
 //! the human decided.
 
 mod common;
+#[path = "curation_reader/fixtures.rs"]
+mod fixtures;
 
-use chrono::{DateTime, NaiveDate, Utc};
-use podras::brief::{BriefInputs, CurationState, assemble};
-use podras::curation::{self, CurationFile, CurationHealth, FocusEntry, ParkEntry};
+use chrono::{DateTime, Utc};
+use fixtures::{assemble_fixture, date, rfc3339_curation, sample};
+use podras::curation;
 use podras::error::Error;
-use podras::model::{
-    Brief, HealthBasis, HealthStatus, Resurface, SourceName, SourceState, SourceStatus, Staleness,
-};
-
-fn date(year: i32, month: u32, day: u32) -> NaiveDate {
-    NaiveDate::from_ymd_opt(year, month, day).expect("valid fixture date")
-}
-
-fn sample() -> CurationFile {
-    CurationFile {
-        purpose_lite: Some("podras: status read path for a cold return".to_string()),
-        max_focus: Some(2),
-        publish_whisper: Some(true),
-        health: Some(CurationHealth {
-            status: "amber".to_string(),
-            owner: Some("@sasha".to_string()),
-            confirmed_at: Some("2026-11-01".to_string()),
-            reason: Some("v1 kickoff".to_string()),
-        }),
-        focus: vec![
-            FocusEntry {
-                id: "podras-d2e".to_string(),
-                reason: Some("proposal phase".to_string()),
-                focused_since: Some("2026-11-17T09:30:00Z".to_string()),
-                confirmed_at: Some("2026-11-17".to_string()),
-            },
-            FocusEntry {
-                id: "podras-i45".to_string(),
-                reason: None,
-                focused_since: Some("2026-11-18".to_string()),
-                confirmed_at: None,
-            },
-        ],
-        parked: vec![
-            ParkEntry {
-                id: "podras-o47".to_string(),
-                reason: "harvest is v1.1".to_string(),
-                resurface: "event:value-prop-roadmap".to_string(),
-                parked_at: Some("2026-11-18".to_string()),
-                confirmed_at: Some("2026-11-18T12:00:00Z".to_string()),
-            },
-            ParkEntry {
-                id: "podras-7jd".to_string(),
-                reason: "freshness hardening is v1.1".to_string(),
-                resurface: "2026-12-01".to_string(),
-                parked_at: Some("2026-11-18".to_string()),
-                confirmed_at: None,
-            },
-        ],
-    }
-}
+use podras::model::{Brief, HealthBasis, HealthStatus, Resurface};
 
 #[test]
 fn curation_file_shape() {
@@ -186,9 +138,113 @@ fn malformed_toml_is_a_parse_error() {
 
     let error = curation::load(repo.root()).expect_err("malformed TOML must be rejected");
     match error {
-        Error::Domain { code, .. } => assert_eq!(code, "curation_parse_error"),
+        Error::Domain {
+            code, suggestion, ..
+        } => {
+            assert_eq!(code, "curation_parse_error");
+            assert_eq!(
+                suggestion.as_deref(),
+                Some(
+                    "fix the TOML, or delete .podras/curation.toml and run podras init to start \
+                     from the template"
+                ),
+                "the hint must name both the manual and the scaffold route"
+            );
+        }
         other => panic!("expected curation_parse_error, got {other:?}"),
     }
+}
+
+#[test]
+fn parked_row_without_resurface_is_excluded_not_fatal() {
+    let repo = common::TempRepo::new();
+    repo.curation(
+        r#"purpose_lite = "podras: partial park"
+
+[health]
+status = "green"
+owner = "@sasha"
+confirmed_at = "2026-11-18"
+
+[[focus]]
+id = "podras-f"
+reason = "still focused"
+focused_since = "2026-11-17"
+confirmed_at = "2026-11-17"
+
+[[parked]]
+id = "podras-ok"
+reason = "valid park"
+resurface = "event:release"
+parked_at = "2026-11-17"
+confirmed_at = "2026-11-17"
+
+[[parked]]
+id = "podras-broken"
+reason = "missing trigger"
+parked_at = "2026-11-17"
+confirmed_at = "2026-11-17"
+
+[[parked]]
+id = "podras-empty"
+reason = ""
+resurface = "event:release"
+parked_at = "2026-11-17"
+confirmed_at = "2026-11-17"
+"#,
+    );
+
+    let brief = assemble_fixture(&repo);
+
+    let parked: Vec<&str> = brief.parked.iter().map(|item| item.id.as_str()).collect();
+    assert_eq!(
+        parked,
+        vec!["podras-ok"],
+        "only the entry with a resurface trigger and a reason stays parked: {parked:?}"
+    );
+    assert_invalid_parked_rows_are_reported(&brief);
+}
+
+fn assert_invalid_parked_rows_are_reported(brief: &Brief) {
+    for broken in ["podras-broken", "podras-empty"] {
+        assert!(
+            !brief.needs_retriage.iter().any(|item| item.id == broken),
+            "an invalid entry never becomes expired: {:?}",
+            brief.needs_retriage
+        );
+    }
+    assert!(
+        brief
+            .warnings
+            .iter()
+            .any(|warning| warning.code == "curation_invalid_resurface"),
+        "the entry without a trigger is reported: {:?}",
+        brief.warnings
+    );
+    assert!(
+        brief
+            .warnings
+            .iter()
+            .any(|warning| warning.code == "curation_invalid_entry"),
+        "the entry without a reason is reported: {:?}",
+        brief.warnings
+    );
+    assert_eq!(
+        brief
+            .focus
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["podras-f"],
+        "a sibling parked entry cannot erase focus"
+    );
+    assert_eq!(brief.health.status, HealthStatus::Green);
+    assert_eq!(brief.health.basis, HealthBasis::Human);
+    assert_eq!(
+        brief.purpose_lite.as_deref(),
+        Some("podras: partial park"),
+        "purpose survives the invalid parked row"
+    );
 }
 
 #[test]
@@ -243,64 +299,12 @@ confirmd_at = "2026-11-18"
     }
 }
 
-/// Assemble a brief from a curation file written with RFC 3339 timestamps.
-fn assemble_rfc3339(repo: &common::TempRepo) -> Brief {
-    let loaded = curation::load(repo.root())
-        .expect("load curation")
-        .expect("curation present");
-    let updated_at = curation::updated_at(repo.root());
-    let inputs = BriefInputs {
-        beads: None,
-        git: None,
-        specs: None,
-        whisper: None,
-        curation: Some(CurationState {
-            curation: loaded,
-            updated_at,
-        }),
-        sources: vec![SourceStatus {
-            name: SourceName::Curation,
-            status: SourceState::Present,
-            observed_at: updated_at,
-            staleness: Staleness::Fresh,
-            detail: None,
-        }],
-        warnings: Vec::new(),
-        as_of: Some(date(2026, 11, 18)),
-        now: date(2026, 11, 18),
-        generated_at: date(2026, 11, 18)
-            .and_hms_opt(9, 0, 0)
-            .expect("valid fixture hour")
-            .and_utc(),
-    };
-    assemble(&inputs)
-}
-
-fn rfc3339_curation(repo: &common::TempRepo) {
-    repo.curation(
-        r#"purpose_lite = "podras: RFC 3339 fixture"
-
-[health]
-status = "green"
-owner = "@sasha"
-confirmed_at = "2026-11-18T07:00:00Z"
-
-[[parked]]
-id = "podras-o47"
-reason = "harvest is v1.1"
-resurface = "event:value-prop-roadmap"
-parked_at = "2026-11-17T22:15:00+02:00"
-confirmed_at = "2026-11-18T07:00:00Z"
-"#,
-    );
-}
-
 #[test]
 fn rfc3339_curation_timestamps_survive_assemble() {
     let repo = common::TempRepo::new();
     rfc3339_curation(&repo);
 
-    let brief = assemble_rfc3339(&repo);
+    let brief = assemble_fixture(&repo);
 
     assert_eq!(brief.parked.len(), 1, "RFC 3339 park dates must resolve");
     assert_eq!(brief.parked[0].id, "podras-o47");

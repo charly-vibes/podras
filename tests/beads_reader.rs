@@ -12,9 +12,10 @@ mod common;
 
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use common::TempRepo;
-use podras::model::{SourceName, SourceState, Staleness};
-use podras::readers::{ReadContext, beads};
-use serde_json::json;
+use podras::brief::BeadsSummary;
+use podras::model::{SourceName, SourceState, Staleness, Warning, WorkItem};
+use podras::readers::{ReadContext, SourceRead, beads};
+use serde_json::{Value, json};
 
 fn day(raw: &str) -> NaiveDate {
     NaiveDate::parse_from_str(raw, "%Y-%m-%d").expect("fixture date is valid")
@@ -28,16 +29,15 @@ fn context(repo: &TempRepo) -> ReadContext {
     }
 }
 
-fn ids(items: &[podras::model::WorkItem]) -> Vec<String> {
+fn ids(items: &[WorkItem]) -> Vec<String> {
     let mut ids: Vec<String> = items.iter().map(|item| item.id.clone()).collect();
     ids.sort();
     ids
 }
 
-#[test]
-fn beads_reader_derives_sets_and_warnings() {
-    let repo = TempRepo::new();
-    let lines = [
+/// Rows that exercise the ready, blocked, in-progress, and closed states.
+fn open_rows() -> Vec<Value> {
+    vec![
         json!({
             "_type": "issue",
             "id": "ready-open",
@@ -85,6 +85,12 @@ fn beads_reader_derives_sets_and_warnings() {
             "dependencies": [],
             "metadata": {}
         }),
+    ]
+}
+
+/// Remaining rows: a satisfied blocker, a status-less issue, and a non-issue.
+fn tail_rows() -> Vec<Value> {
+    vec![
         json!({
             "_type": "issue",
             "id": "open-on-done",
@@ -125,31 +131,71 @@ fn beads_reader_derives_sets_and_warnings() {
             "id": "ignored-note",
             "body": "not an issue"
         }),
-    ];
+    ]
+}
 
-    let mut body: String = lines
+/// Serialize every fixture row as JSONL and append one malformed line.
+fn export_body() -> String {
+    let mut rows = open_rows();
+    rows.extend(tail_rows());
+    let mut body: String = rows
         .iter()
-        .map(|line| serde_json::to_string(line).expect("serialize fixture row"))
+        .map(|row| serde_json::to_string(row).expect("serialize fixture row"))
         .collect::<Vec<_>>()
         .join("\n");
     body.push_str("\nnot valid json\n");
-    repo.write(".beads/issues.jsonl", &body);
+    body
+}
 
-    let read = beads::read(&context(&repo));
-    let data = read.data.as_ref().expect("present export yields data");
+fn observed_instant() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 11, 16, 12, 0, 0)
+        .single()
+        .expect("fixture instant is valid")
+}
 
+fn assert_present_status(read: &SourceRead<BeadsSummary>, data: &BeadsSummary) {
     assert_eq!(read.status.name, SourceName::Beads);
     assert_eq!(read.status.status, SourceState::Present);
     assert_eq!(read.status.staleness, Staleness::Unknown);
-    assert_eq!(
-        data.observed_at,
-        Some(
-            Utc.with_ymd_and_hms(2026, 11, 16, 12, 0, 0)
-                .single()
-                .expect("fixture instant is valid")
-        )
-    );
+    assert_eq!(data.observed_at, Some(observed_instant()));
+}
 
+fn assert_blocked_details(item: &WorkItem) {
+    assert_eq!(item.blocked_by, vec!["blocker-open"]);
+    assert_eq!(item.priority, Some(1));
+    assert_eq!(item.age_days, Some(7));
+    assert_eq!(item.reason, None);
+    assert_eq!(item.confirmed_at, None);
+}
+
+fn assert_ready_details(data: &BeadsSummary) {
+    let ready = data
+        .open
+        .iter()
+        .find(|item| item.id == "ready-open")
+        .expect("ready item is open");
+    assert_eq!(ready.title.as_deref(), Some("ready work"));
+    assert_eq!(ready.status.as_deref(), Some("open"));
+    assert_eq!(ready.priority, Some(2));
+    assert_eq!(ready.age_days, Some(8));
+    assert!(ready.blocked_by.is_empty());
+}
+
+fn assert_parse_warning(warning: &Warning) {
+    assert_eq!(warning.source, SourceName::Beads);
+    assert_eq!(warning.code, "beads_parse_error");
+    assert!(warning.detail.contains('1'), "detail: {}", warning.detail);
+}
+
+#[test]
+fn beads_reader_derives_sets_and_warnings() {
+    let repo = TempRepo::new();
+    repo.write(".beads/issues.jsonl", &export_body());
+
+    let read = beads::read(&context(&repo), day("2026-11-18"));
+    let data = read.data.as_ref().expect("present export yields data");
+
+    assert_present_status(&read, data);
     assert_eq!(
         ids(&data.open),
         vec![
@@ -172,29 +218,11 @@ fn beads_reader_derives_sets_and_warnings() {
     );
     assert_eq!(ids(&data.blocked), vec!["blocked-open"]);
 
-    let blocked = &data.blocked[0];
-    assert_eq!(blocked.blocked_by, vec!["blocker-open"]);
-    assert_eq!(blocked.priority, Some(1));
-    assert_eq!(blocked.age_days, Some(7));
-    assert_eq!(blocked.reason, None);
-    assert_eq!(blocked.confirmed_at, None);
-
-    let ready = data
-        .open
-        .iter()
-        .find(|item| item.id == "ready-open")
-        .expect("ready item is open");
-    assert_eq!(ready.title.as_deref(), Some("ready work"));
-    assert_eq!(ready.status.as_deref(), Some("open"));
-    assert_eq!(ready.priority, Some(2));
-    assert_eq!(ready.age_days, Some(8));
-    assert!(ready.blocked_by.is_empty());
+    assert_blocked_details(&data.blocked[0]);
+    assert_ready_details(data);
 
     assert_eq!(read.warnings.len(), 1);
-    let warning = &read.warnings[0];
-    assert_eq!(warning.source, SourceName::Beads);
-    assert_eq!(warning.code, "beads_parse_error");
-    assert!(warning.detail.contains('1'), "detail: {}", warning.detail);
+    assert_parse_warning(&read.warnings[0]);
 }
 
 #[test]
@@ -202,7 +230,7 @@ fn empty_export_falls_back_to_file_mtime() {
     let repo = TempRepo::new();
     repo.write(".beads/issues.jsonl", "");
 
-    let read = beads::read(&context(&repo));
+    let read = beads::read(&context(&repo), day("2026-11-18"));
     let data = read.data.as_ref().expect("empty export is still present");
 
     assert_eq!(read.status.status, SourceState::Present);
@@ -224,7 +252,7 @@ fn empty_export_falls_back_to_file_mtime() {
 fn beads_reader_missing_export_reports_missing() {
     let repo = TempRepo::new();
 
-    let read = beads::read(&context(&repo));
+    let read = beads::read(&context(&repo), day("2026-11-18"));
 
     assert!(read.data.is_none());
     assert_eq!(read.status.name, SourceName::Beads);

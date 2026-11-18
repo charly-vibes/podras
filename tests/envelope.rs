@@ -14,12 +14,17 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde_json::Value;
 
 use podras::brief::{self, BeadsSummary, BriefInputs, CurationState, GitSummary};
-use podras::curation::{CurationFile, CurationHealth, FocusEntry, ParkEntry};
+use podras::curation::{CurationFile, FocusEntry, ParkEntry};
 use podras::model::{
     Brief, RecentEvent, Signal, SignalKind, SourceName, SourceState, SourceStatus, Staleness,
     Warning, WorkItem,
 };
 use podras::render::envelope;
+
+#[path = "envelope/fixtures.rs"]
+mod fixtures;
+
+use fixtures::{schema_curation, schema_sources, schema_warnings};
 
 /// Pinned evaluation date for every envelope fixture.
 const AS_OF: &str = "2026-11-18";
@@ -114,10 +119,31 @@ fn truncation_flagged() {
     );
 }
 
-#[test]
-fn bounds_declared() {
-    let mut fixture = inputs();
-    fixture.beads = Some(BeadsSummary {
+fn bounds_focus() -> Vec<FocusEntry> {
+    (0..3)
+        .map(|index| FocusEntry {
+            id: format!("open-{index}"),
+            reason: Some("fixture focus".to_string()),
+            focused_since: Some("2026-11-01".to_string()),
+            confirmed_at: Some("2026-11-01".to_string()),
+        })
+        .collect()
+}
+
+fn bounds_parked() -> Vec<ParkEntry> {
+    (0..7)
+        .map(|index| ParkEntry {
+            id: format!("parked-{index}"),
+            reason: "fixture park".to_string(),
+            resurface: "2027-01-01".to_string(),
+            parked_at: Some("2026-11-01".to_string()),
+            confirmed_at: Some("2026-11-01".to_string()),
+        })
+        .collect()
+}
+
+fn bounds_beads() -> BeadsSummary {
+    BeadsSummary {
         open: (0..7)
             .map(|index| work_item(&format!("open-{index}"), 1))
             .collect(),
@@ -128,45 +154,48 @@ fn bounds_declared() {
             .map(|index| work_item(&format!("ready-{index}"), 3))
             .collect(),
         observed_at: Some(instant("2026-11-17T00:00:00Z")),
-    });
-    fixture.git = Some(GitSummary {
+    }
+}
+
+fn bounds_git() -> GitSummary {
+    GitSummary {
         head_sha: Some("0123456789abcdef".to_string()),
         recent: (0..8).map(recent_event).collect(),
         observed_at: Some(instant("2026-11-17T00:00:00Z")),
-    });
-    fixture.curation = Some(CurationState {
+    }
+}
+
+fn bounds_curation() -> CurationState {
+    CurationState {
         curation: CurationFile {
             purpose_lite: Some("bounds fixture".to_string()),
             max_focus: Some(1),
             publish_whisper: Some(false),
             health: None,
-            focus: (0..3)
-                .map(|index| FocusEntry {
-                    id: format!("open-{index}"),
-                    reason: Some("fixture focus".to_string()),
-                    focused_since: Some("2026-11-01".to_string()),
-                    confirmed_at: Some("2026-11-01".to_string()),
-                })
-                .collect(),
-            parked: (0..7)
-                .map(|index| ParkEntry {
-                    id: format!("parked-{index}"),
-                    reason: "fixture park".to_string(),
-                    resurface: "2027-01-01".to_string(),
-                    parked_at: Some("2026-11-01".to_string()),
-                    confirmed_at: Some("2026-11-01".to_string()),
-                })
-                .collect(),
+            focus: bounds_focus(),
+            parked: bounds_parked(),
         },
         updated_at: Some(instant("2026-11-01T00:00:00Z")),
-    });
-    fixture.warnings = (0..7)
+    }
+}
+
+fn bounds_warnings() -> Vec<Warning> {
+    (0..7)
         .map(|index| Warning {
             source: SourceName::Beads,
             code: format!("fixture_warning_{index}"),
             detail: format!("fixture warning {index}"),
         })
-        .collect();
+        .collect()
+}
+
+#[test]
+fn bounds_declared() {
+    let mut fixture = inputs();
+    fixture.beads = Some(bounds_beads());
+    fixture.git = Some(bounds_git());
+    fixture.curation = Some(bounds_curation());
+    fixture.warnings = bounds_warnings();
 
     let brief = brief::assemble(&fixture);
 
@@ -187,80 +216,7 @@ fn bounds_declared() {
     assert_eq!(brief.truncation.omitted_counts, expected);
 }
 
-#[test]
-fn envelope_schema_conform() {
-    let mut fixture = inputs();
-    fixture.sources = vec![
-        source_status(
-            SourceName::Beads,
-            SourceState::Present,
-            Some(instant("2026-11-17T00:00:00Z")),
-            Staleness::Fresh,
-            None,
-        ),
-        source_status(
-            SourceName::Git,
-            SourceState::Present,
-            Some(instant("2026-11-17T00:00:00Z")),
-            Staleness::Fresh,
-            None,
-        ),
-        source_status(
-            SourceName::Openspec,
-            SourceState::Missing,
-            None,
-            Staleness::Unknown,
-            Some("openspec/ is absent"),
-        ),
-        source_status(
-            SourceName::Whisper,
-            SourceState::Unreadable,
-            None,
-            Staleness::Unknown,
-            Some("notes could not be parsed"),
-        ),
-        source_status(
-            SourceName::Curation,
-            SourceState::Present,
-            Some(instant("2026-11-01T00:00:00Z")),
-            Staleness::Stale,
-            None,
-        ),
-    ];
-    fixture.curation = Some(CurationState {
-        curation: CurationFile {
-            purpose_lite: Some("schema fixture".to_string()),
-            max_focus: Some(1),
-            publish_whisper: Some(false),
-            health: Some(CurationHealth {
-                status: "amber".to_string(),
-                owner: Some("@sasha".to_string()),
-                confirmed_at: Some(AS_OF.to_string()),
-                reason: Some("fixture verdict".to_string()),
-            }),
-            focus: vec![FocusEntry {
-                id: "fixture-focus".to_string(),
-                reason: Some("fixture focus".to_string()),
-                focused_since: Some("2026-11-01".to_string()),
-                confirmed_at: Some("2026-11-01".to_string()),
-            }],
-            parked: Vec::new(),
-        },
-        updated_at: Some(instant("2026-11-01T00:00:00Z")),
-    });
-    fixture.warnings = vec![Warning {
-        source: SourceName::Beads,
-        code: "beads_parse_error".to_string(),
-        detail: "one malformed line skipped".to_string(),
-    }];
-
-    let mut brief = brief::assemble(&fixture);
-    brief.health.signals.push(Signal {
-        kind: SignalKind::StaleFocus,
-        reason: "focus unconfirmed for 15 days".to_string(),
-    });
-
-    let wrapped = envelope::envelope(&brief).expect("envelope builds");
+fn assert_envelope_wrapper(wrapped: &genesis::envelope::Envelope<Brief>, brief: &Brief) {
     assert!(wrapped.ok);
     assert_eq!(
         wrapped.envelope_kind,
@@ -271,7 +227,83 @@ fn envelope_schema_conform() {
         wrapped.warnings.is_empty(),
         "warnings live inside the brief, not the genesis wrapper"
     );
-    assert_eq!(wrapped.data, brief);
+    assert_eq!(wrapped.data, *brief);
+}
+
+fn assert_source_enums(instance: &Value) {
+    let source_names = ["beads", "git", "openspec", "whisper", "curation"];
+    let source_states = ["present", "missing", "unreadable"];
+    let stalenesses = ["fresh", "stale", "unknown"];
+    for index in 0..source_names.len() {
+        assert_enum_member(instance, &format!("/sources/{index}/name"), &source_names);
+        assert_enum_member(
+            instance,
+            &format!("/sources/{index}/status"),
+            &source_states,
+        );
+        assert_enum_member(
+            instance,
+            &format!("/sources/{index}/staleness"),
+            &stalenesses,
+        );
+    }
+}
+
+fn assert_health_enums(instance: &Value, brief: &Brief) {
+    let health_statuses = ["green", "amber", "red", "unknown"];
+    let health_bases = ["human", "signals", "none"];
+    let signal_kinds = [
+        "stale_focus",
+        "wip_over_cap",
+        "stuck_project",
+        "focus_closed",
+        "parked_expired",
+        "orphan_commits",
+        "spec_change_without_bead",
+    ];
+    assert_enum_member(instance, "/health/status", &health_statuses);
+    assert_enum_member(instance, "/health/basis", &health_bases);
+    for index in 0..brief.health.signals.len() {
+        assert_enum_member(
+            instance,
+            &format!("/health/signals/{index}/kind"),
+            &signal_kinds,
+        );
+    }
+}
+
+fn assert_warning_enums(instance: &Value, brief: &Brief) {
+    let source_names = ["beads", "git", "openspec", "whisper", "curation"];
+    for index in 0..brief.warnings.len() {
+        assert_enum_member(
+            instance,
+            &format!("/warnings/{index}/source"),
+            &source_names,
+        );
+    }
+}
+
+fn assert_enum_members(instance: &Value, brief: &Brief) {
+    assert_source_enums(instance);
+    assert_health_enums(instance, brief);
+    assert_warning_enums(instance, brief);
+}
+
+#[test]
+fn envelope_schema_conform() {
+    let mut fixture = inputs();
+    fixture.sources = schema_sources();
+    fixture.curation = Some(schema_curation());
+    fixture.warnings = schema_warnings();
+
+    let mut brief = brief::assemble(&fixture);
+    brief.health.signals.push(Signal {
+        kind: SignalKind::StaleFocus,
+        reason: "focus unconfirmed for 15 days".to_string(),
+    });
+
+    let wrapped = envelope::envelope(&brief).expect("envelope builds");
+    assert_envelope_wrapper(&wrapped, &brief);
 
     let instance = serde_json::to_value(&wrapped.data).expect("brief serializes");
     let schema = schemars::schema_for!(Brief);
@@ -289,50 +321,7 @@ fn envelope_schema_conform() {
         "the JSON render carries the same brief payload"
     );
 
-    let source_names = ["beads", "git", "openspec", "whisper", "curation"];
-    let source_states = ["present", "missing", "unreadable"];
-    let stalenesses = ["fresh", "stale", "unknown"];
-    let health_statuses = ["green", "amber", "red", "unknown"];
-    let health_bases = ["human", "signals", "none"];
-    let signal_kinds = [
-        "stale_focus",
-        "wip_over_cap",
-        "stuck_project",
-        "focus_closed",
-        "parked_expired",
-        "orphan_commits",
-        "spec_change_without_bead",
-    ];
-
-    for index in 0..source_names.len() {
-        assert_enum_member(&instance, &format!("/sources/{index}/name"), &source_names);
-        assert_enum_member(
-            &instance,
-            &format!("/sources/{index}/status"),
-            &source_states,
-        );
-        assert_enum_member(
-            &instance,
-            &format!("/sources/{index}/staleness"),
-            &stalenesses,
-        );
-    }
-    assert_enum_member(&instance, "/health/status", &health_statuses);
-    assert_enum_member(&instance, "/health/basis", &health_bases);
-    for index in 0..brief.health.signals.len() {
-        assert_enum_member(
-            &instance,
-            &format!("/health/signals/{index}/kind"),
-            &signal_kinds,
-        );
-    }
-    for index in 0..brief.warnings.len() {
-        assert_enum_member(
-            &instance,
-            &format!("/warnings/{index}/source"),
-            &source_names,
-        );
-    }
+    assert_enum_members(&instance, &brief);
 }
 
 #[test]

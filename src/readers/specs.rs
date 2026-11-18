@@ -34,15 +34,23 @@ const CHANGE_TITLES: (&str, &str) = ("proposal.md", "spec.md");
 const SPEC_TITLES: (&str, &str) = ("spec.md", "proposal.md");
 
 /// Read the OpenSpec change store for the repository.
-pub fn read(context: &ReadContext) -> SourceRead<SpecSummary> {
+///
+/// `evaluation_date` is the run's single evaluation date, used for entry ages
+/// and stale counts, so no wall-clock read can shift this source alone.
+pub fn read(context: &ReadContext, evaluation_date: NaiveDate) -> SourceRead<SpecSummary> {
     let openspec = context.repo_root.join("openspec");
-    let as_of = context.as_of.unwrap_or_else(|| Utc::now().date_naive());
     let Some(store) = open_store(&openspec) else {
         return missing();
     };
 
-    let changes = observe(store.changes, "change", CHANGE_TITLES, true, as_of);
-    let specs = observe(store.specs, "spec", SPEC_TITLES, false, as_of);
+    let changes = observe(
+        store.changes,
+        "change",
+        CHANGE_TITLES,
+        true,
+        evaluation_date,
+    );
+    let specs = observe(store.specs, "spec", SPEC_TITLES, false, evaluation_date);
 
     let stale_count = changes.stale_count + specs.stale_count;
     let observed_at = newest(changes.observed_at, specs.observed_at);
