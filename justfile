@@ -16,5 +16,9 @@ lint:
 fmt:
     cargo fmt --all -- --check
 
+# Check committed renders against a fresh render; optional YYYY-MM-DD evaluation date.
+brief-drift *args:
+    scripts/guards/brief-drift.sh {{args}}
+
 # Full local gate, in the same order CI runs it.
 ci: fmt lint test

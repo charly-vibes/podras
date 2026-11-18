@@ -353,6 +353,9 @@ pub struct Warning {
 pub struct Brief {
     /// Envelope schema identifier.
     pub schema_version: String,
+    /// Evaluation clock pinning every date-sensitive decision.
+    #[schemars(with = "String")]
+    pub as_of: NaiveDate,
     /// Generation timestamp; the only volatile field.
     #[schemars(with = "String")]
     pub generated_at: DateTime<Utc>,

@@ -218,7 +218,7 @@ and warn, but do not veto a human verdict. Curation missing already forces
 `unknown` (no fresh human verdict), so it needs no extra rule.
 
 Fault injection is proof, not narrative: `tests/health.rs` and the
-`podras-4i2` experiment suite (`tests/experiments/staleness.rs`) kill the
+`podras-4i2` experiment suite (`tests/experiments.rs`) kill the
 tracker, age the beads export past 7 days, close the focus silently, and edit a
 spec after harvest. Each injection must surface in `sources[]`, signals, or the
 verdict; none may render `green`.
@@ -303,7 +303,7 @@ directly in any pipeline that has committed renders.
 | ticket | deliverable | scenarios |
 |---|---|---|
 | `podras-o47` | `src/harvest.rs`, `src/harvest/{notes,commits,specs}.rs`, `src/model.rs` (harvest types + `SourceName::ALL`), `src/brief.rs` (`all_ids`, whisper body), `src/readers/git.rs`, `src/readers/whisper.rs`, `src/commands.rs`, `src/main.rs`, `src/render/harvest.rs`, `tests/harvest.rs`, `README.md`, `src/verbs/init.rs` | `harvest_candidates_never_decisions`, `harvest_idempotent_provenance` |
-| `podras-7jd` | `src/freshness.rs` (table + guard), `src/brief.rs` (guard call), `src/health/verdict.rs`, `src/health/links.rs` (shared predicates), `tests/freshness.rs`, `tests/health.rs`, `tests/experiments/staleness.rs`, `tests/determinism.rs` | `freshness_thresholds_declared`, `as_of_reproducible_render` |
+| `podras-7jd` | `src/freshness.rs` (table + guard), `src/brief.rs` (guard call), `src/health/verdict.rs`, `src/health/links.rs` (shared predicates), `tests/freshness.rs`, `tests/health.rs`, `tests/experiments.rs`, `tests/determinism.rs` | `freshness_thresholds_declared`, `as_of_reproducible_render` |
 | `podras-mgd` | `scripts/guards/brief-drift.sh`, `src/write.rs`, `src/commands.rs`, `src/main.rs`, `tests/drift_gate.rs`, `lefthook.yml`, `justfile`, `README.md` | `drift_gate_detects_stale_render` |
 | shared | `.espectacular/changes/add-brief-v1-1/brief-v1/*.toml` | all five |
 

@@ -11,6 +11,8 @@
 
 use std::collections::BTreeSet;
 
+use chrono::NaiveDate;
+
 use crate::model::{
     Brief, Health, ParkedItem, RecentEvent, SCHEMA_VERSION, SourceName, SourceState, SourceStatus,
     Staleness, Truncation, Warning, WorkItem,
@@ -125,6 +127,7 @@ fn recent_events(inputs: &BriefInputs) -> Vec<RecentEvent> {
 /// Build the typed envelope, leaving `source_hash` for the caller to stamp.
 pub(super) fn envelope(
     inputs: &BriefInputs,
+    evaluation_date: NaiveDate,
     sections: Sections,
     truncation: Truncation,
     health: Health,
@@ -142,6 +145,7 @@ pub(super) fn envelope(
     } = sections;
     Brief {
         schema_version: SCHEMA_VERSION.to_string(),
+        as_of: evaluation_date,
         generated_at: inputs.generated_at,
         sources: declared_sources(&inputs.sources),
         curation: curation_stamp(inputs.curation.as_ref()),

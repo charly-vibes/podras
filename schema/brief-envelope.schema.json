@@ -4,6 +4,10 @@
   "description": "The complete typed brief envelope.",
   "type": "object",
   "properties": {
+    "as_of": {
+      "description": "Evaluation clock pinning every date-sensitive decision.",
+      "type": "string"
+    },
     "blocked": {
       "description": "Blocked or waiting items.",
       "type": "array",
@@ -111,6 +115,7 @@
   },
   "required": [
     "schema_version",
+    "as_of",
     "generated_at",
     "sources",
     "curation",

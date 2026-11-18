@@ -19,18 +19,16 @@ use crate::model::{Health, Signal};
 
 mod curation;
 mod git;
-mod links;
+pub(crate) mod links;
 mod specs;
 mod verdict;
 
 use curation::{focus_closed, parked_expired, stale_focus, wip_over_cap};
 use git::{orphan_commits, stuck_project};
+use links::SIGNAL_HORIZON_DAYS;
 use specs::spec_change_without_bead;
 
 pub(crate) use verdict::layer;
-
-/// A focus, commit, or change older than this many days is stale evidence.
-pub(super) const SIGNAL_HORIZON_DAYS: i64 = 14;
 
 /// Compute the named signals that fire for the observed inputs.
 pub fn signals(inputs: &BriefInputs) -> Vec<Signal> {

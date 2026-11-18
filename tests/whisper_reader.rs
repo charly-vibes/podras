@@ -77,6 +77,23 @@ fn latest_entry_supplies_observed_at_and_one_next_action() {
         reading.content_hash.as_deref(),
         Some(sha256_hex(TWO_ENTRIES).as_str())
     );
+    let entry = reading
+        .latest_entry
+        .as_ref()
+        .expect("the newest timestamped entry is retained for harvest");
+    assert_eq!(
+        entry.path,
+        repo.root().join(".whisper/branches/main/notes.md")
+    );
+    assert_eq!(entry.timestamp, "2026-11-18T12:34:56Z");
+    assert!(
+        entry.body.contains("ship the whisper reader"),
+        "body holds the newest entry: {entry:?}"
+    );
+    assert!(
+        !entry.body.contains("old action that must not surface"),
+        "body never includes an older entry: {entry:?}"
+    );
 }
 
 #[test]
@@ -150,4 +167,11 @@ fn global_fallback_resolves_origin_and_slugs_branch() {
         reading.content_hash.as_deref(),
         Some(sha256_hex(note).as_str())
     );
+    let entry = reading
+        .latest_entry
+        .as_ref()
+        .expect("global fallback retains the latest entry");
+    assert_eq!(entry.path, notes);
+    assert_eq!(entry.timestamp, "2026-11-18T09:00:00Z");
+    assert!(entry.body.contains("global fallback action"));
 }

@@ -31,7 +31,7 @@ has passed.
 - [x] 2.1 red: `tests/freshness.rs::freshness_thresholds_declared` — read the public table, assert beads 7, git 7, openspec 14, whisper 14, curation 14 exactly once per `SourceName::ALL` entry; on-horizon fresh, +1 day stale, absent unknown; no project-wide staleness field in the envelope.
 - [x] 2.2 `src/freshness.rs`: replace the five constants and the `match` with `HORIZONS: [Horizon; 5]` and a `horizon_days` lookup; document thresholds in the module doc; `evaluate` keeps v1 boundary semantics.
 - [x] 2.3 `src/freshness.rs::impaired_mandatory` + `src/brief.rs` + `src/health/verdict.rs`: pass impaired mandatory sources into `layer`; a fresh human green downgrades to `amber` (`basis = human`) naming each impaired source; no new `SignalKind`, no envelope schema change.
-- [x] 2.4 `tests/health.rs` + `tests/experiments/staleness.rs` (from podras-4i2): fault injection — killed tracker, beads export aged past 7 days, silently closed focus, spec edited after harvest; each surfaces in `sources[]`/signals/verdict and none renders green.
+- [x] 2.4 `tests/health.rs` + `tests/experiments.rs` (from podras-4i2): fault injection — killed tracker, beads export aged past 7 days, silently closed focus, spec edited after harvest; each surfaces in `sources[]`/signals/verdict and none renders green.
 - [x] 2.5 red: `tests/determinism.rs::as_of_reproducible_render` — two `--json --as-of` runs and two `--write --as-of` runs; payload equality after removing `generated_at`, `BRIEF.json` diff only in `generated_at`, `BRIEF.md` diff only in the stamp's `generated_at` value, boundary verdicts stable, invalid date exits 2 and writes nothing.
 - [x] 2.6 Docs: README states the pinned `--as-of` semantics and the threshold table's single declaration point.
 

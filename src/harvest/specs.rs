@@ -13,8 +13,9 @@ use std::path::Path;
 
 use super::detectors::Vocabulary;
 use super::git::commit_touching;
-use super::{Candidate, CandidateKind, Evidence, EvidenceKind, HORIZON_DAYS};
+use super::{Candidate, CandidateKind, Evidence, EvidenceKind};
 use crate::brief::BriefInputs;
+use crate::health::links::SIGNAL_HORIZON_DAYS;
 use crate::model::WorkItem;
 
 /// Repository-relative prefix for active spec changes.
@@ -43,7 +44,7 @@ fn is_active_change(item: &WorkItem) -> bool {
     item.status.as_deref() == Some("change")
         && item
             .age_days
-            .is_some_and(|days| days <= HORIZON_DAYS as u32)
+            .is_some_and(|days| days <= SIGNAL_HORIZON_DAYS as u32)
 }
 
 /// True when the change id or title names a known tracker id.

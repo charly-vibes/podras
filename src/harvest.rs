@@ -32,9 +32,6 @@ pub use render::{render, to_json};
 /// Schema identifier carried by every harvest payload.
 pub const SCHEMA_VERSION: &str = "harvest.v1";
 
-/// Candidate window shared with the health signals: fourteen days.
-const HORIZON_DAYS: i64 = 14;
-
 /// The complete typed harvest payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Harvest {
@@ -124,7 +121,8 @@ pub struct Candidate {
 /// Assemble harvest candidates from already-collected inputs.
 ///
 /// `repo` is only used for bounded read-only queries (`git log`, `git
-/// rev-parse`, note bytes, and the full beads export). Nothing is written.
+/// rev-parse`, and the full beads export). The whisper note itself is already
+/// located and parsed by the reader in `inputs`. Nothing is written.
 pub fn assemble(repo: &Path, inputs: &BriefInputs) -> Harvest {
     let vocabulary = detectors::Vocabulary::load(repo, inputs);
     let mut candidates = Vec::new();

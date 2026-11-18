@@ -185,6 +185,7 @@ fn inputs(
             observed_at: observed_at(),
             next_action: None,
             content_hash: None,
+            latest_entry: None,
         }),
         curation,
         sources: Vec::new(),

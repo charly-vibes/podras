@@ -1,4 +1,4 @@
-//! Purpose: shared candidate detection vocabulary and ordering.
+//! Purpose: harvest's tracker vocabulary and stable candidate ordering.
 //!
 //! Responsibilities:
 //! - load the tracker vocabulary from the full beads export and open work;
@@ -6,16 +6,20 @@
 //! - own the stable total order and duplicate removal.
 //!
 //! Rationale: the vocabulary is the false-positive gate for the whole module,
-//! so it lives in one place instead of being re-derived per detector. Every
-//! predicate is pure over already-read values; only `load` touches the export.
+//! so it lives in one place instead of being re-derived per detector. The
+//! predicates themselves and the fourteen-day window are shared with health
+//! and live in `crate::health::links`; only `load` touches the export.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 
 use chrono::NaiveDate;
 
-use super::{Candidate, HORIZON_DAYS};
+use super::Candidate;
 use crate::brief::BriefInputs;
+use crate::health::links::{
+    SIGNAL_HORIZON_DAYS, names_tracker, open_work_paths, tokenize, touches_path, tracker_prefix,
+};
 
 /// Repository-relative path of the beads export.
 const BEADS_REL_PATH: &str = ".beads/issues.jsonl";
@@ -53,15 +57,13 @@ impl Vocabulary {
         let ids = export_ids(repo);
         let prefixes = ids
             .iter()
-            .filter_map(|id| prefix(id).map(str::to_string))
+            .filter_map(|id| tracker_prefix(id).map(str::to_string))
             .collect();
-        let mut open_paths = BTreeSet::new();
-        if let Some(beads) = &inputs.beads {
-            for item in &beads.open {
-                open_paths.insert(item.id.to_ascii_lowercase());
-                open_paths.extend(path_tokens(item.title.as_deref()));
-            }
-        }
+        let open_paths = inputs
+            .beads
+            .as_ref()
+            .map(open_work_paths)
+            .unwrap_or_default();
         Self {
             ids,
             prefixes,
@@ -71,19 +73,12 @@ impl Vocabulary {
 
     /// True when `text` names a known tracker id or a `<prefix>-<id>` token.
     pub(super) fn names_tracker(&self, text: &str) -> bool {
-        tokenize(text).any(|token| {
-            let token = token.to_ascii_lowercase();
-            self.ids.contains(&token)
-                || prefix(&token).is_some_and(|prefix| self.prefixes.contains(prefix))
-        })
+        names_tracker(text, &self.ids, &self.prefixes)
     }
 
     /// True when `text` contains one of the open work-item path tokens.
     pub(super) fn touches_path(&self, text: &str) -> bool {
-        let text = text.to_ascii_lowercase();
-        self.open_paths
-            .iter()
-            .any(|path| text.contains(path.as_str()))
+        touches_path(text, &self.open_paths)
     }
 
     /// Tracker-shaped tokens absent from the full export, lowercased and sorted.
@@ -91,7 +86,7 @@ impl Vocabulary {
         tokenize(text)
             .map(str::to_ascii_lowercase)
             .filter(|token| {
-                prefix(token).is_some_and(|prefix| self.prefixes.contains(prefix))
+                tracker_prefix(token).is_some_and(|prefix| self.prefixes.contains(prefix))
                     && !self.ids.contains(token)
             })
             .collect()
@@ -105,7 +100,7 @@ pub(super) fn evaluation_date(inputs: &BriefInputs) -> NaiveDate {
 
 /// True when `date` falls inside the candidate horizon.
 pub(super) fn within_window(date: NaiveDate, evaluation: NaiveDate) -> bool {
-    (0..=HORIZON_DAYS).contains(&(evaluation - date).num_days())
+    (0..=SIGNAL_HORIZON_DAYS).contains(&(evaluation - date).num_days())
 }
 
 /// Every id in the full beads export, lowercased.
@@ -117,49 +112,5 @@ fn export_ids(repo: &Path) -> BTreeSet<String> {
         .filter(|line| !line.trim().is_empty())
         .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
         .filter_map(|row| row.get("id")?.as_str().map(str::to_ascii_lowercase))
-        .collect()
-}
-
-/// Prefix before the final `-`, when both halves are id-shaped.
-fn prefix(token: &str) -> Option<&str> {
-    let (prefix, suffix) = token.rsplit_once('-')?;
-    if prefix.is_empty()
-        || suffix.is_empty()
-        || !prefix
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '_')
-        || !suffix
-            .chars()
-            .any(|character| character.is_ascii_alphanumeric())
-    {
-        return None;
-    }
-    Some(prefix)
-}
-
-/// Split prose into id-shaped tokens on anything but alphanumerics, `-`, `_`.
-pub(super) fn tokenize(text: &str) -> impl Iterator<Item = &str> {
-    text.split(|character: char| {
-        !(character.is_ascii_alphanumeric() || character == '-' || character == '_')
-    })
-    .filter(|token| !token.is_empty())
-}
-
-/// Path-like tokens in an item title, e.g. `src/health.rs`.
-fn path_tokens(title: Option<&str>) -> BTreeSet<String> {
-    title
-        .into_iter()
-        .flat_map(|title| title.split_whitespace())
-        .map(|word| {
-            word.trim_matches(|character: char| {
-                !(character.is_ascii_alphanumeric()
-                    || character == '/'
-                    || character == '.'
-                    || character == '-'
-                    || character == '_')
-            })
-        })
-        .filter(|word| word.contains('/') && word.len() > 1)
-        .map(str::to_ascii_lowercase)
         .collect()
 }

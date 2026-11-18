@@ -125,6 +125,7 @@ fn whisper() -> WhisperReading {
         observed_at: Some(instant(9)),
         next_action: Some("pick up podras-a".to_string()),
         content_hash: None,
+        latest_entry: None,
     }
 }
 

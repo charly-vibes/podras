@@ -63,6 +63,20 @@ pub struct SpecSummary {
     pub observed_at: Option<DateTime<Utc>>,
 }
 
+/// The latest timestamped whisper entry, kept as harvest evidence.
+///
+/// The body is internal: the brief never renders it, so session narrative
+/// cannot reach a committed artifact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WhisperEntry {
+    /// Notes file the entry was read from.
+    pub path: std::path::PathBuf,
+    /// Entry header timestamp, verbatim as written (RFC 3339).
+    pub timestamp: String,
+    /// Entry body after the header; never serialized or rendered.
+    pub body: String,
+}
+
 /// Light whisper-notes reading: latest branch entry only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WhisperReading {
@@ -72,6 +86,8 @@ pub struct WhisperReading {
     pub next_action: Option<String>,
     /// Hash of the observed note content.
     pub content_hash: Option<String>,
+    /// The newest timestamped entry, when one exists.
+    pub latest_entry: Option<WhisperEntry>,
 }
 
 /// Curation state as read from `.podras/curation.toml`.
@@ -132,7 +148,14 @@ pub fn assemble(inputs: &BriefInputs) -> Brief {
     );
     ordering::sort_warnings(&mut warnings);
 
-    let mut brief = sections::envelope(inputs, sections, truncation, health, warnings);
+    let mut brief = sections::envelope(
+        inputs,
+        evaluation_date,
+        sections,
+        truncation,
+        health,
+        warnings,
+    );
     brief.source_hash = Some(crate::model::source_hash(&brief, brief.head_sha.as_deref()));
     brief
 }

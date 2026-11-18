@@ -12,12 +12,13 @@
 # Rationale: a committed render is only reviewable if drift between it and its
 # inputs fails loudly. Regeneration targets a temp directory because `podras
 # brief --write` defaults to the repository root; the committed render records
-# its own evaluation date in `generated_at`, so the gate compares the same clock
-# the render was built with instead of drifting with today.
+# its own evaluation date in `as_of`, so the gate compares the same clock the
+# render was built with instead of drifting with today.
 #
 # Usage: scripts/guards/brief-drift.sh [YYYY-MM-DD]
-#   The date argument overrides $PODRAS_DRIFT_AS_OF, which overrides the date
-#   prefix of BRIEF.json's `.data.generated_at`.
+#   The date argument overrides $PODRAS_DRIFT_AS_OF, which overrides the
+#   recorded `.data.as_of` (falling back to the date prefix of
+#   `.data.generated_at` for renders written before as_of was recorded).
 #   $PODRAS_BIN selects the podras binary; the default is the repository's
 #   target/debug/podras when executable, else `podras` from PATH.
 #
@@ -84,9 +85,9 @@ fi
 
 as_of=${1:-${PODRAS_DRIFT_AS_OF:-}}
 if [[ -z $as_of ]]; then
-    as_of=$(jq -r '.data.generated_at // empty' "$JSON" | cut -c1-10)
+    as_of=$(jq -r '(.data.as_of // (.data.generated_at | .[0:10])) // empty' "$JSON")
     if [[ -z $as_of ]]; then
-        err "cannot read .data.generated_at from $JSON; pass YYYY-MM-DD or set PODRAS_DRIFT_AS_OF"
+        err "cannot read .data.as_of from $JSON; pass YYYY-MM-DD or set PODRAS_DRIFT_AS_OF"
         exit 2
     fi
 fi
@@ -118,10 +119,12 @@ if [[ ! -e $tmp/$MARKDOWN || ! -e $tmp/$JSON ]]; then
 fi
 
 # JSON normalization: drop the wall-clock stamp, the content hash, per-source
-# warnings, and clone-local provenance (observed_at/staleness) from every row.
+# warnings, and clone-local provenance (the curation file mtime, per-source
+# observed_at/staleness, and absolute-path details) from every row.
 normalize_json() {
     jq 'del(.data.generated_at, .data.source_hash, .data.warnings, .meta.author)
-        | (.data.sources[]? |= del(.observed_at, .staleness))' "$1"
+        | del(.data.curation.updated_at)
+        | (.data.sources[]? |= del(.observed_at, .staleness, .detail))' "$1"
 }
 
 # Markdown normalization: compare the narrative through the health section and

@@ -30,18 +30,29 @@ pub fn write_renders(repo: &Path, brief: &Brief, whisper_next_action: Option<&st
     write_renders_to(repo, repo, brief, whisper_next_action)
 }
 
-/// Write the render pair into `dir`, creating it when absent.
+/// Write the render pair into an existing `dir`; never creates it.
 ///
 /// `repo` remains the privacy authority: `publish_whisper` is read from the
 /// repository's curation, never from the target directory. Staging and rename
 /// semantics are the pair writer's, so the default repository-root target and a
-/// temporary gate directory behave identically.
+/// temporary gate directory behave identically. A missing or non-directory
+/// target is a hard error that writes nothing.
 pub fn write_renders_to(
     repo: &Path,
     dir: &Path,
     brief: &Brief,
     whisper_next_action: Option<&str>,
 ) -> Result<()> {
+    if !dir.is_dir() {
+        return Err(Error::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!(
+                "cannot write renders: {} is not an existing directory",
+                dir.display()
+            ),
+        )));
+    }
+
     let reentry = if publish_whisper(repo) {
         whisper_next_action
     } else {
@@ -49,10 +60,6 @@ pub fn write_renders_to(
     };
     let markdown = crate::render::markdown::render(brief, reentry)?;
     let json = crate::render::envelope::to_json(brief)?;
-
-    if !dir.exists() {
-        std::fs::create_dir_all(dir).map_err(Error::Io)?;
-    }
 
     write_pair(
         dir,

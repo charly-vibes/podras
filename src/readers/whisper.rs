@@ -4,12 +4,15 @@
 //! - locate repo-local `.whisper/branches/<branch>/notes.md`, falling back to
 //!   `main`, then the global `~/.whisper/repos/<repo>/branches/<slug>/` store;
 //! - extract the latest entry timestamp and its first next-action line;
+//! - retain that entry's path, raw timestamp, and body for harvest evidence;
 //! - hash the observed note bytes so freshness is comparable without content.
 //!
 //! Rationale: whisper content is private by default and expensive to mine;
 //! v1 reads exactly one entry so the brief can stamp freshness without
-//! importing session narrative into the committed render. Missing or
-//! unreadable notes are values, never errors, so the brief always renders.
+//! importing session narrative into the committed render. Harvest consumes
+//! the same entry as evidence, so note discovery happens exactly once here.
+//! Missing or unreadable notes are values, never errors, so the brief always
+//! renders.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,7 +21,7 @@ use std::process::Command;
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 
-use crate::brief::WhisperReading;
+use crate::brief::{WhisperEntry, WhisperReading};
 use crate::model::{SourceName, SourceState, SourceStatus, Staleness, Warning};
 use crate::readers::{ReadContext, SourceRead};
 
@@ -61,7 +64,7 @@ pub fn read_with_home(context: &ReadContext, home: Option<&Path>) -> SourceRead<
 
     for path in candidates {
         match fs::read_to_string(&path) {
-            Ok(content) => return present(&content),
+            Ok(content) => return present(&path, &content),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(error) => return unreadable(&path, &error),
         }
@@ -70,13 +73,22 @@ pub fn read_with_home(context: &ReadContext, home: Option<&Path>) -> SourceRead<
     missing(&branch)
 }
 
-fn present(content: &str) -> SourceRead<WhisperReading> {
-    let (observed_at, next_action) = parse_latest_entry(content);
+fn present(path: &Path, content: &str) -> SourceRead<WhisperReading> {
+    let ParsedEntry {
+        observed_at,
+        next_action,
+        latest_entry,
+    } = parse_latest_entry(content);
     SourceRead {
         data: Some(WhisperReading {
             observed_at,
             next_action,
             content_hash: Some(sha256_hex(content.as_bytes())),
+            latest_entry: latest_entry.map(|(timestamp, body)| WhisperEntry {
+                path: path.to_path_buf(),
+                timestamp,
+                body,
+            }),
         }),
         status: SourceStatus {
             name: SourceName::Whisper,
@@ -125,37 +137,54 @@ fn missing(branch: &str) -> SourceRead<WhisperReading> {
     }
 }
 
-/// Parse the newest entry: its header timestamp and first next-action line.
+/// Parse the newest entry: its header timestamp, first next-action line, and
+/// the raw timestamp plus body harvest uses as evidence.
 ///
 /// Entries without a `- <RFC3339>` header still yield a next action when the
-/// file carries a `## Next action` heading; the observation instant is `None`.
-fn parse_latest_entry(content: &str) -> (Option<DateTime<Utc>>, Option<String>) {
+/// file carries a `## Next action` heading; the observation instant and the
+/// evidence entry are both `None`.
+fn parse_latest_entry(content: &str) -> ParsedEntry {
     let lines: Vec<&str> = content.lines().collect();
-    let headers: Vec<(usize, DateTime<Utc>)> = lines
+    let headers: Vec<(usize, DateTime<Utc>, &str)> = lines
         .iter()
         .enumerate()
-        .filter_map(|(index, line)| entry_timestamp(line).map(|stamp| (index, stamp)))
+        .filter_map(|(index, line)| entry_timestamp(line).map(|(stamp, raw)| (index, stamp, raw)))
         .collect();
 
-    if let Some(&(start, observed_at)) = headers.last() {
+    if let Some(&(start, observed_at, raw)) = headers.last() {
         let end = headers
             .iter()
-            .find(|(index, _)| *index > start)
-            .map(|(index, _)| *index)
+            .find(|(index, _, _)| *index > start)
+            .map(|(index, _, _)| *index)
             .unwrap_or(lines.len());
-        return (Some(observed_at), next_action(&lines[start + 1..end]));
+        return ParsedEntry {
+            observed_at: Some(observed_at),
+            next_action: next_action(&lines[start + 1..end]),
+            latest_entry: Some((raw.to_string(), lines[start + 1..].join("\n"))),
+        };
     }
 
-    (None, next_action(&lines))
+    ParsedEntry {
+        observed_at: None,
+        next_action: next_action(&lines),
+        latest_entry: None,
+    }
 }
 
-/// Parse a `- <RFC3339 timestamp> ...` entry header.
-fn entry_timestamp(line: &str) -> Option<DateTime<Utc>> {
+/// One parsed note file: brief fields plus the harvest evidence entry.
+struct ParsedEntry {
+    observed_at: Option<DateTime<Utc>>,
+    next_action: Option<String>,
+    latest_entry: Option<(String, String)>,
+}
+
+/// Parse a `- <RFC3339 timestamp> ...` entry header, returning the raw token.
+fn entry_timestamp(line: &str) -> Option<(DateTime<Utc>, &str)> {
     let rest = line.trim_start().strip_prefix("- ")?;
     let token = rest.split_whitespace().next()?;
     DateTime::parse_from_rfc3339(token)
         .ok()
-        .map(|stamp| stamp.with_timezone(&Utc))
+        .map(|stamp| (stamp.with_timezone(&Utc), token))
 }
 
 /// First non-empty line after the first `## Next action` heading.

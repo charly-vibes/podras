@@ -72,11 +72,19 @@ pub struct SourceRead<T> {
 /// curation load failures become an `unreadable` row with in-memory defaults so
 /// the brief still renders.
 pub fn collect(context: &ReadContext) -> Result<BriefInputs> {
+    collect_with_home(context, None)
+}
+
+/// Read every declared source, resolving the whisper global store under `home`.
+///
+/// `None` means `$HOME`. Threading an explicit home lets tests exercise the
+/// global fallback without mutating the process environment.
+pub fn collect_with_home(context: &ReadContext, home: Option<&Path>) -> Result<BriefInputs> {
     let generated_at = Utc::now();
     let evaluation_date = context.evaluation_date(generated_at.date_naive());
     let mut sources = Vec::with_capacity(SourceName::DECLARED.len());
     let mut warnings = Vec::new();
-    let loaded = load_sources(context, evaluation_date, &mut sources, &mut warnings);
+    let loaded = load_sources(context, home, evaluation_date, &mut sources, &mut warnings);
     let curation = record_curation(
         &context.repo_root,
         evaluation_date,
@@ -108,6 +116,7 @@ struct Loaded {
 /// Read the four content sources in declaration order, recording their rows.
 fn load_sources(
     context: &ReadContext,
+    home: Option<&Path>,
     evaluation_date: NaiveDate,
     sources: &mut Vec<SourceStatus>,
     warnings: &mut Vec<Warning>,
@@ -126,7 +135,12 @@ fn load_sources(
             sources,
             warnings,
         ),
-        whisper: record(whisper::read(context), evaluation_date, sources, warnings),
+        whisper: record(
+            whisper::read_with_home(context, home),
+            evaluation_date,
+            sources,
+            warnings,
+        ),
     }
 }
 

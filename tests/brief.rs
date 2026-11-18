@@ -112,6 +112,7 @@ fn curated_whisper() -> WhisperReading {
         observed_at: Some(instant()),
         next_action: Some("pick up podras-b".to_string()),
         content_hash: None,
+        latest_entry: None,
     }
 }
 

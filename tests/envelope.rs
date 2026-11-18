@@ -2,6 +2,7 @@
 //!
 //! Responsibilities:
 //! - assert the declared section bounds and truncation accounting;
+//! - assert the recorded evaluation clock is part of the semantic payload;
 //! - assert an emitted brief validates against the model's JSON Schema;
 //! - assert the committed schema bytes are exactly the regenerated model schema.
 //!
@@ -17,7 +18,7 @@ use podras::brief::{self, BeadsSummary, BriefInputs, CurationState, GitSummary};
 use podras::curation::{CurationFile, FocusEntry, ParkEntry};
 use podras::model::{
     Brief, RecentEvent, Signal, SignalKind, SourceName, SourceState, SourceStatus, Staleness,
-    Warning, WorkItem,
+    Warning, WorkItem, semantic_payload, source_hash,
 };
 use podras::render::envelope;
 
@@ -322,6 +323,40 @@ fn envelope_schema_conform() {
     );
 
     assert_enum_members(&instance, &brief);
+}
+
+#[test]
+fn evaluation_clock_recorded_and_hashed() {
+    let pinned = brief::assemble(&inputs());
+    assert_eq!(
+        pinned.as_of,
+        date(AS_OF),
+        "assemble records the pinned evaluation clock"
+    );
+    assert_eq!(
+        semantic_payload(&pinned)["as_of"],
+        serde_json::json!(AS_OF),
+        "the evaluation clock is part of the semantic payload"
+    );
+
+    let mut unpinned = inputs();
+    unpinned.as_of = None;
+    unpinned.now = date("2026-11-10");
+    assert_eq!(
+        brief::assemble(&unpinned).as_of,
+        date("2026-11-10"),
+        "without --as-of the recorded clock is the caller's wall-clock date"
+    );
+
+    let earlier = BriefInputs {
+        as_of: Some(date("2026-11-17")),
+        ..inputs()
+    };
+    assert_ne!(
+        source_hash(&pinned, None),
+        source_hash(&brief::assemble(&earlier), None),
+        "two evaluation clocks cannot share a source hash"
+    );
 }
 
 #[test]
