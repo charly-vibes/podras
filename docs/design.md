@@ -19,6 +19,55 @@ pinky ledger topics `pm-status-tool-structure` (synthesized) and
    openspec = specs; git = implemented changes; curation = focus/parked/
    roadmap; the brief = derived, never hand-edited.
 
+## Resolved decisions — grill-part-2 (2026-11-18, ticket podras-fx1)
+
+6. **Objective (locked, evidence-grounded)**: narrow status lens — "what's
+   happening now, what deserves attention next". Machine census 2026-11-18:
+   118 repos, 58 touched ≤7d, 1,469 open issues, 275/315 openspec changes
+   stale >14d, roadmap/vision docs maintained nowhere, why-one-liners
+   already live in flagship READMEs. Pitch/roadmap = separate future lens,
+   gated on value-prop-roadmap synthesis + brief v1 proof. Purpose-lite
+   one-liner lives in curation (only 3/118 repos have a README ##Objective).
+7. **v1 = stages ①–③**: read path + envelope + focus/park. Harvest ④ and
+   freshness-hardening ⑤ = v1.1.
+8. **Render targets**: on-demand narrative + typed JSON envelope, plus a
+   **committed** `BRIEF.md`/`BRIEF.json` (`brief --write`) — generated-only,
+   freshness-stamped, visible to non-cloners and tool-less agents. Committed
+   envelope differs from on-demand only in `generated_at` (C3 determinism
+   rules apply). org render deferred (local-notes workflow).
+9. **Sources (v1 read path)**: beads + git mandatory; openspec best-effort
+   (missing → per-source warning, never failure); whisper light-read (latest
+   branch entry: timestamp → observed_at, `## Next action` → human re-entry
+   line); curation read-if-present. Deep whisper extraction stays v1.1
+   harvest (amends resolved decision 2's "harvest input only" for the read
+   path).
+10. **Privacy**: whisper *content* never appears in the committed render
+    (on-demand only); committed render carries the freshness stamp; per-repo
+    `publish_whisper` opt-in flag in `.podras/` config.
+11. **Curation file (T5)**: `.podras/curation.toml` (git-committed):
+    purpose-lite one-liner + `[[focus]]` + `[[parked]]` entries (id, reason,
+    focused_since/parked_at, confirmed_at, resurface trigger). Verbs write
+    it; humans may hand-edit; agents never do (AGENTS.md block says so).
+12. **Focus cap (T1)**: N=1 by construction — `focus <id>` is
+    select-or-replace (auto-demote previous with notice); `max_focus`
+    configurable; exceeding cap is always a health warning, never a block.
+13. **Health authority (T3)**: deterministic thresholds produce named
+    signals (stale focus, WIP over cap, stuck project, focus→closed, parked
+    past resurface, orphan commits, spec-changed-without-linked-bead — each
+    with `reason`); verdict is layered: fresh human verdict > signals >
+    `unknown`. Human verdicts expire (confirmed_at freshness). Never turn
+    unknown into green.
+14. **Init**: `podras init` in v1 — idempotent: scaffold `.podras/
+    curation.toml` + write AGENTS.md managed block (run `brief --json`;
+    freshness first; beads owns lifecycle; focus is intent, not permission;
+    never silently change focus/unpark) via genesis `managed_block` (drift-
+    checkable, provenance footer).
+15. **Stack**: Rust, built on the `genesis` shared crate — clap-derive CLI,
+    `managed_block` (AGENTS.md hook), `status::StatusContributor` (cross-tool
+    health dashboard, v1.1 integration), miette/thiserror, serde/toml,
+    suggestions; house justfile/CI/espectacular/beads toolset already
+    scaffolded here.
+
 ## Brief v1 contract (from corpus consensus)
 
 Fixed sections, cold-return reading order:
@@ -63,13 +112,21 @@ Fault-injection test: close the focus issue silently, kill the tracker,
 edit a spec post-harvest — the brief must expose each discrepancy rather
 than manufacture a coherent false narrative.
 
-## Open questions (grill-part-2)
+## Open questions (parked, non-blocking)
 
-- T1: focus WIP cap — hard N=1 vs ≤3 (cap-exceeded as health signal either way)
-- T3: health authority — deterministic thresholds vs signals+human judgment
-- T5: curation file format/location (`.toml` vs `.json`; dir name)
-- Pitch/roadmap contract — pending `value-prop-roadmap` investigation:
-  value-prop likely links repo identity doc (README §Objective); roadmap
-  likely curated in the workspace, linking down to beads epics, with
-  bet-age-vs-appetite as a health signal
-- Implementation stack (Rust to match turu house style vs other)
+- Roadmap-lens contract — separate future lens, after `value-prop-roadmap`
+  synthesis lands (value-prop links identity doc; roadmap curated in
+  workspace, linking to beads epics; bet-age-vs-appetite as health signal)
+- BRIEF.md drift gate: CI regen-and-diff check (pattern: genesis `aix-check`)
+- org-mode render target for local notes
+- Portfolio view (multi-repo) timing — corpus left it unvalidated
+- Envelope `evidence_quality` field placement (chatgpt's
+  direct|derived|curated|unknown)
+
+## Validation experiments (gate for any "done")
+
+Amnesia test (stranger + brief + 10 min vs maintainer's answers) · agent
+cold-start (fresh session, repo + AGENTS.md block + `brief --json`) ·
+staleness fault injection (close focus issue silently / kill tracker / edit
+spec post-harvest → brief must expose each, never manufacture a false
+narrative).
