@@ -14,8 +14,8 @@ use chrono::{DateTime, SecondsFormat, Utc};
 
 use crate::error::Result;
 use crate::model::{
-    Brief, Health, HealthBasis, HealthStatus, ParkedItem, RecentEvent, SignalKind, SourceName,
-    SourceState, Staleness, WorkItem,
+    Brief, HealthBasis, HealthStatus, ParkedItem, RecentEvent, RoadmapWarningKind, SignalKind,
+    SourceName, SourceState, Staleness, WorkItem,
 };
 
 /// The explicit placeholder rendered for an empty section or absent value.
@@ -46,7 +46,7 @@ pub fn render(brief: &Brief, reentry: Option<&str>) -> Result<String> {
     );
     render_parked(&mut out, brief);
     render_recent(&mut out, brief);
-    render_health(&mut out, &brief.health);
+    render_health(&mut out, brief);
     render_sources(&mut out, brief);
 
     Ok(out)
@@ -110,7 +110,8 @@ fn render_recent(out: &mut String, brief: &Brief) {
     out.push('\n');
 }
 
-fn render_health(out: &mut String, health: &Health) {
+fn render_health(out: &mut String, brief: &Brief) {
+    let health = &brief.health;
     push_heading(out, "## ", "Health + confidence");
     push_text(
         out,
@@ -129,6 +130,24 @@ fn render_health(out: &mut String, health: &Health) {
                 "- signal: {} — {}",
                 signal_kind(signal.kind),
                 oneline(&signal.reason)
+            ),
+        );
+    }
+    // The lens's advisory no-go candidate surfaces once, deterministically:
+    // the first firing warning in the lens's code-then-subject-then-detail
+    // order. It stays advisory and never becomes a signal or verdict.
+    if let Some(roadmap) = &brief.roadmap
+        && let Some(warning) = roadmap
+            .warnings
+            .iter()
+            .find(|warning| warning.code == RoadmapWarningKind::NoGoViolationCandidate)
+    {
+        push_text(
+            out,
+            &format!(
+                "- no-go risk: {} — {}",
+                oneline(&warning.subject),
+                oneline(&warning.detail)
             ),
         );
     }

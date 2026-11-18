@@ -638,6 +638,19 @@ pub(crate) fn review_passed_roadmap() -> String {
     roadmap_file(&identity(Some("2027-05-18")), &rendered, &[])
 }
 
+/// A lens whose only no-go matches a seeded open bead by title token.
+///
+/// `seed_full` exports `podras-a` titled `Brief read path`, so the term
+/// `brief` fires exactly one `no_go_violation_candidate` for the health line.
+pub(crate) fn candidate_roadmap() -> String {
+    let no_go = review_no_go(
+        "no-open-tracker-writes",
+        "podras never reopens settled work",
+        &["brief"],
+    );
+    roadmap_file(&identity(Some("2027-05-18")), &[], &[no_go])
+}
+
 /// Tracker export for the canonical lens: one open, recently moved epic.
 pub(crate) fn seed_full(repo: &TempRepo) {
     repo.beads_jsonl_rows(&[

@@ -253,3 +253,33 @@ fn as_of_reproducible_render() {
     assert_writes_are_reproducible(&repo);
     assert_unparseable_as_of_writes_nothing();
 }
+
+#[path = "roadmap/fixtures.rs"]
+mod road;
+
+use road::{AS_OF as LENS_AS_OF, candidate_roadmap, fixture_with_roadmap};
+
+/// Two committed renders at one `--as-of` are byte-identical apart from the
+/// freshness stamp, including the single advisory no-go line the Health
+/// section gains from a firing `no_go_violation_candidate` warning.
+#[test]
+fn health_no_go_line_determinism() {
+    let repo = fixture_with_roadmap(&candidate_roadmap());
+
+    let args = ["brief", "--write", "--as-of", LENS_AS_OF];
+    fixtures::podras_in(&repo, &args).success();
+    let first_markdown = repo.read("BRIEF.md");
+    assert!(
+        first_markdown.contains("- no-go risk: no-open-tracker-writes — podras-a matched `brief`"),
+        "the Health section names the at-risk no-go: {}",
+        first_markdown
+    );
+
+    fixtures::podras_in(&repo, &args).success();
+    let second_markdown = repo.read("BRIEF.md");
+    assert_eq!(
+        fixtures::normalize_freshness_stamp(&first_markdown),
+        fixtures::normalize_freshness_stamp(&second_markdown),
+        "two --write runs at the same --as-of differ only in the stamp"
+    );
+}
