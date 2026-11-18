@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 description = "Per-repository project status brief for humans and AI agents"
 license = "Apache-2.0"
+repository = "https://github.com/charly-vibes/podras"
+keywords = ["status", "brief", "agents", "project-management"]
+categories = ["development-tools", "command-line-utilities"]
 
 [[bin]]
 name = "podras"
