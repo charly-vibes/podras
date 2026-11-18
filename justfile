@@ -4,6 +4,10 @@
 build:
     cargo build
 
+# Install the binary to ~/.cargo/bin.
+install:
+    cargo install --path . --locked
+
 # Run the full test suite.
 test:
     cargo test
