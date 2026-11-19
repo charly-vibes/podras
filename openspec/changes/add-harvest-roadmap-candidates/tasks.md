@@ -88,3 +88,10 @@ empty candidate set), then the detector landed and the file went green.
 | `harvest_roadmap_run_writes_nothing` | podras-0k4 | `tests/harvest_roadmap.rs` (`harvest_roadmap_run_writes_nothing`) |
 | `harvest_roadmap_run_is_deterministic` | podras-0k4 | `tests/harvest_roadmap.rs` (`harvest_roadmap_run_twice_on_fixture_repo`) |
 | `malformed_roadmap_degrades_harvest` | podras-0k4 | `tests/harvest_roadmap.rs` (`harvest_runs_on_fixture_repo_with_malformed_roadmap`) |
+
+## 6. Review fixes (Rule of 5, post-implementation)
+
+- [x] 6.1 RF-1/RF-2 red→green: unadmitted-shaping-bet test, fallback sort key, admission-gated circuit breaker (`src/harvest/roadmap.rs`, `tests/harvest_roadmap.rs`)
+- [x] 6.2 RF-3: module doc states the admission gating
+- [x] 6.3 RF-4: `bet admit` prints a note when replacing an existing epic (`src/verbs/bet.rs`)
+- [x] 6.4 RF-5: staged property rows for the absent/future and unadmitted-bet tests; invariant row notes the gating

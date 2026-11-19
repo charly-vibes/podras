@@ -308,6 +308,43 @@ fn harvest_runs_on_fixture_repo_with_terminal_bets_exempt() {
     );
 }
 
+/// A shaping bet with no admission stamp — the exact shape `podras bet add`
+/// writes: `admitted_at` stays absent until a verb admits the bet.
+fn unadmitted_bet(id: &str, horizon: &str, epic: Option<&str>) -> String {
+    let mut out = format!(
+        "[[bets]]\nid = \"{id}\"\ntitle = \"Do the thing\"\noutcome = \"The thing lands\"\n\
+         horizon = \"{horizon}\"\nappetite_weeks = 6\nowner = \"charly\"\n"
+    );
+    if let Some(epic) = epic {
+        out.push_str(&format!("epic = \"{epic}\"\n"));
+    }
+    out.push_str("status = \"shaping\"\nlast_reviewed = \"2026-11-10\"\n\n");
+    out
+}
+
+#[test]
+fn harvest_runs_on_fixture_repo_with_unadmitted_shaping_bet() {
+    let repo = repo_with_epics();
+    with_roadmap(
+        &repo,
+        &identity(Some("2027-05-18")),
+        &[unadmitted_bet("bet-unadmitted", "now", Some(CLOSED_EPIC_ID))],
+    );
+    let candidates = candidates_of(&run_harvest(&repo));
+    let retire = kind_candidates(&candidates, "retire_or_reshape");
+    assert_eq!(
+        retire.len(),
+        1,
+        "a shaping bet without admitted_at still fires its epic trigger: {candidates:?}"
+    );
+    let summary = retire[0]["summary"].as_str().expect("summary");
+    assert!(
+        summary.contains("bet-unadmitted") && summary.contains("bet_epic_closed_not_retired"),
+        "the summary names the bet id and reason: {summary}"
+    );
+    assert_roadmap_candidate(retire[0]);
+}
+
 #[test]
 fn harvest_roadmap_run_writes_nothing() {
     let repo = repo_with_epics();

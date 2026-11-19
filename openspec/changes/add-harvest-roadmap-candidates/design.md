@@ -106,16 +106,48 @@ from this change; they belong in the deployed specs when this change archives
 
 | id | kind | expr | traces_to |
 |----|------|------|-----------|
-| harvest_candidates_proposed_not_decided | invariant | `harvest emits advisory roadmap candidates — identity_review only when identity.next_review is strictly earlier than the evaluation date (absent ⇒ unknown ⇒ none; equal or later ⇒ fresh ⇒ none; at most one) and retire_or_reshape once per non-terminal bet (shaping|committed|building|deferred; shipped and killed exempt) tripping the shared circuit-breaker (evaluation − admitted_at > appetite_weeks×7×1.25), idle-epic (> fourteen days), or closed-epic predicate, the summary naming the bet id and every triggering reason; candidates compute over every bet in the file (the lens 5-bet bound does not apply) ordered by lens status rank, then admitted_at, then id, with the identity candidate last; a run writes nothing and no candidate auto-kills, auto-promotes, or rewrites state` | [[roadmap.v1]] |
+| harvest_candidates_proposed_not_decided | invariant | `harvest emits advisory roadmap candidates — identity_review only when identity.next_review is strictly earlier than the evaluation date (absent ⇒ unknown ⇒ none; equal or later ⇒ fresh ⇒ none; at most one) and retire_or_reshape once per non-terminal bet (shaping|committed|building|deferred; shipped and killed exempt) tripping the shared circuit-breaker (evaluation − admitted_at > appetite_weeks×7×1.25, admitted bets only — a bet without an admitted_at has no appetite clock and stays reachable through the epic predicates), idle-epic (> fourteen days), or closed-epic predicate, the summary naming the bet id and every triggering reason; candidates compute over every bet in the file (the lens 5-bet bound does not apply) ordered by lens status rank, then admitted_at, then id — unadmitted bets sort by last_reviewed in that rank — with the identity candidate last; a run writes nothing and no candidate auto-kills, auto-promotes, or rewrites state` | [[roadmap.v1]] |
 | harvest_roadmap_degrade_not_fail | invariant | `an absent roadmap.toml yields no roadmap candidates and no warning; a malformed or unreadable roadmap.toml degrades harvest to zero roadmap candidates with one warning carrying the domain code while the run exits 0 — a broken human-owned state file never blocks a read-only run` | [[roadmap.v1]] |
 
 ## Properties
 
 | id | kind | derives_from | generator | predicate |
 |----|------|--------------|-----------|-----------|
-| identity_review_fires_only_when_next_review_passed | unit | [[roadmap.v1.harvest_candidates_proposed_not_decided]] | `harvest_runs_on_fixture_repo_with_passed_next_review()` | `passed next_review ⇒ exactly one identity_review candidate with roadmap evidence naming the passed date and ordered last ∧ absent next_review ⇒ none ∧ future next_review ⇒ none` |
+| identity_review_fires_only_when_next_review_passed | unit | [[roadmap.v1.harvest_candidates_proposed_not_decided]] | `harvest_runs_on_fixture_repo_with_passed_next_review()` | `passed next_review ⇒ exactly one identity_review candidate with roadmap evidence naming the passed date and ordered last` |
+| identity_review_absent_or_future_next_review | unit | [[roadmap.v1.harvest_candidates_proposed_not_decided]] | `harvest_runs_on_fixtures_with_absent_and_future_next_review()` | `absent next_review ⇒ no identity_review candidate ∧ future next_review ⇒ none` |
+| unadmitted_shaping_bet_still_fires_epic_triggers | unit | [[roadmap.v1.harvest_candidates_proposed_not_decided]] | `harvest_runs_on_fixture_repo_with_unadmitted_shaping_bet()` | `a shaping bet without admitted_at whose epic is closed yields exactly one retire_or_reshape candidate naming the bet id and bet_epic_closed_not_retired, with roadmap evidence` |
 | retire_or_reshape_fires_per_trigger_with_terminal_bets_exempt | unit | [[roadmap.v1.harvest_candidates_proposed_not_decided]] | `harvest_runs_on_fixture_repo_with_each_retire_or_reshape_trigger()` | `each non-terminal trigger yields one candidate naming bet id + reason ∧ candidates order by lens status rank, then admitted_at, then id` |
 | terminal_bets_exempt | unit | [[roadmap.v1.harvest_candidates_proposed_not_decided]] | `harvest_runs_on_fixture_repo_with_terminal_bets_exempt()` | `shipped and killed bets tripping every trigger shape yield zero retire_or_reshape candidates` |
 | harvest_roadmap_run_writes_nothing | unit | [[roadmap.v1.harvest_candidates_proposed_not_decided]] | `harvest_roadmap_run_writes_nothing()` | `roadmap.toml, curation.toml, and .beads bytes identical before and after a run` |
 | harvest_roadmap_run_is_deterministic | unit | [[roadmap.v1.harvest_candidates_proposed_not_decided]] | `harvest_roadmap_run_twice_on_fixture_repo()` | `two runs at one --as-of emit identical payloads apart from generated_at ∧ both roadmap kinds present ∧ identity_review ordered last ∧ evidence refs resolve` |
 | malformed_roadmap_degrades_harvest | unit | [[roadmap.v1.harvest_roadmap_degrade_not_fail]] | `harvest_runs_on_fixture_repo_with_malformed_roadmap()` | `exit == 0 ∧ zero roadmap candidates ∧ one degradation warning ∧ no repository byte changes` |
+
+## Review fixes (Rule of 5)
+
+A Rule-of-5 review of the delivered commit (`7655e7a`) produced five findings,
+all applied by this change. The TypeSafe verification pass verified the two
+HIGH findings (`jev-1.14.0`, confidence 0.96 and 0.93 against the 0.8 gate);
+MEDIUM/LOW findings are self-reported.
+
+- **RF-1 — an unadmitted bet keeps its epic triggers (CORR-001, verified).**
+  `retire_or_reshape` dropped the whole candidate for any bet whose
+  `admitted_at` was absent — exactly what `bet add` writes — even when the
+  closed- or idle-epic predicate fired. The circuit breaker now ages admitted
+  bets only, the epic predicates reach every non-terminal bet, and the sort
+  key falls back to `last_reviewed` (renamed `sort_key`; the order stays
+  total and deterministic).
+- **RF-2 — the fixture models `bet add` output (EDGE-001, verified).**
+  `unadmitted_bet()` writes a shaping bet with no `admitted_at`, and the new
+  `harvest_runs_on_fixture_repo_with_unadmitted_shaping_bet` test asserts the
+  epic trigger still fires.
+- **RF-3 — the module doc states the gating (CLAR-001).** The doc claimed the
+  triggers "apply to every non-terminal status" without the admission caveat;
+  it now says the circuit breaker ages admitted bets only.
+- **RF-4 — the admit notice (CORR-002).** `podras bet admit` prints a note
+  when it replaces an epic the shaping bet already carried.
+- **RF-5 — the generator ledger (CLAR-002).** The absent/future branch and the
+  unadmitted-bet test each get their own property row, so archive-time
+  generator-to-test matching stays one-to-one.
+- Not applied: CORR-003 (checking the epic id against the tracker export on
+  admit) — it adds tracker reads to a human verb, contract surface beyond the
+  locked decisions; recorded as a CONSIDER for a deliberate later change.

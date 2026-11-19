@@ -85,6 +85,7 @@ pub fn admit(
     review_or_kill: &str,
     as_of: NaiveDate,
 ) -> Result<()> {
+    let mut replaced = false;
     transition(repo, id, as_of, |bet| {
         if bet.status != BetStatus::Shaping {
             return Err(transition_error(
@@ -93,12 +94,16 @@ pub fn admit(
                 "admission is shaping to committed only",
             ));
         }
+        replaced = bet.epic.is_some();
         bet.status = BetStatus::Committed;
         bet.admitted_at = Some(stamp(as_of));
         bet.epic = Some(epic.to_string());
         bet.review_or_kill = Some(review_or_kill.to_string());
         Ok(())
     })?;
+    if replaced {
+        println!("note: replaced the epic the shaping bet already carried");
+    }
     println!("admitted bet `{id}` (committed, review or kill by {review_or_kill})");
     Ok(())
 }

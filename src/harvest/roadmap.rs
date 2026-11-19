@@ -53,7 +53,7 @@ fn non_terminal(status: BetStatus) -> bool {
 /// One roadmap candidate keyed by the deterministic sort key.
 struct Derived {
     rank: u8,
-    admitted_at: NaiveDate,
+    sort_key: NaiveDate,
     id: String,
     candidate: Candidate,
 }
@@ -96,7 +96,7 @@ pub(super) fn candidates(
     derived.sort_by(|left, right| {
         left.rank
             .cmp(&right.rank)
-            .then_with(|| left.admitted_at.cmp(&right.admitted_at))
+            .then_with(|| left.sort_key.cmp(&right.sort_key))
             .then_with(|| left.id.cmp(&right.id))
     });
     let mut candidates: Vec<Candidate> = derived
@@ -112,21 +112,29 @@ pub(super) fn candidates(
 
 /// The retire-or-reshape candidate for one bet, when a trigger fires.
 ///
-/// The triggers reuse the lens's own predicates (the 1.25x circuit breaker and
-/// the fourteen-day idle horizon) so the lens and harvest can never disagree.
-/// Unlike the lens warnings, they apply to every non-terminal status: a
-/// shaping or deferred bet that tripped one is exactly the row a human needs
-/// to see. One candidate per bet even when several triggers fire, with the
-/// reasons joined in trigger order.
+/// Triggers reuse the lens's own predicates — shared with the lens warnings
+/// (the 1.25x circuit breaker and the fourteen-day idle horizon) so the lens
+/// and harvest can never disagree.
+/// The circuit breaker ages admitted bets only — an unadmitted bet has no
+/// appetite clock — while the epic predicates reach every non-terminal
+/// status: a shaping or deferred bet that tripped one is exactly the row a
+/// human needs to see. One candidate per bet even when several triggers
+/// fire, with the reasons joined in trigger order.
 fn retire_or_reshape(
     bet: &BetEntry,
     records: &[IssueRecord],
     evaluation_date: NaiveDate,
 ) -> Option<Derived> {
-    let admitted_at = bet.admitted_at.as_deref().and_then(parse_human_date)?;
+    // Admission is optional until a verb admits the bet, so the circuit
+    // breaker — which ages the bet against its appetite — only applies to
+    // admitted bets; an unadmitted bet has no appetite clock. The epic
+    // predicates reach every non-terminal bet regardless.
+    let admitted_at = bet.admitted_at.as_deref().and_then(parse_human_date);
     let mut reasons = Vec::new();
 
-    if circuit_breaker_overrun(admitted_at, bet.appetite_weeks, evaluation_date) {
+    if let Some(admitted_at) = admitted_at
+        && circuit_breaker_overrun(admitted_at, bet.appetite_weeks, evaluation_date)
+    {
         let appetite_days = i64::from(bet.appetite_weeks) * 7;
         let age_days = (evaluation_date - admitted_at).num_days();
         reasons.push(format!(
@@ -156,7 +164,11 @@ fn retire_or_reshape(
 
     Some(Derived {
         rank: status_rank(bet.status),
-        admitted_at,
+        // Unadmitted bets sort by their last review, keeping the order total
+        // and deterministic without inventing an admission date.
+        sort_key: admitted_at.unwrap_or_else(|| {
+            parse_human_date(&bet.last_reviewed).unwrap_or(evaluation_date)
+        }),
         id: bet.id.clone(),
         candidate: Candidate {
             kind: CandidateKind::RetireOrReshape,
