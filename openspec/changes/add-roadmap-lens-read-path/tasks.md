@@ -42,12 +42,12 @@ Rule-of-5 review fixes and re-runs those gates at landing.
 - [x] 3.5 `src/commands.rs` + `src/main.rs` + `src/render/roadmap.rs` + `src/write.rs`: `podras roadmap [--json] [--as-of <date>] [--write]` reusing the brief read path and envelope; `roadmap_missing` when the verb runs alone without the file; human narrative renders enums and constraints with explicit `none` lines; `write_roadmap_renders_to` emits `ROADMAP.md` / `ROADMAP.json` with the brief's generated-artifact semantics.
 - [x] 3.6 Docs: README documents `podras roadmap`, the state file's human ownership, and the advisory-only warning rule; `src/verbs/init.rs` managed block gains exactly the two decision-25 lines and a second `podras init` stays byte-identical.
 
-## 4. Out of scope for this change (tracked, not delivered here)
+## 4. Out of scope for this change (declared exclusions — not delivered here; no beads tickets exist as of 2026-11-19)
 
-- [ ] 4.1 (stage ⑦) Curation verbs `bet add|admit|defer|kill`; no verb writes `.podras/roadmap.toml` here. Scenario: —.
-- [ ] 4.2 (stage ⑧) Harvest extension: `identity_review` when `next_review` passes, `retire_or_reshape` as a candidate row, never a mutation. Scenario: —.
-- [ ] 4.3 A second parked list, or any roadmap-side copy of curation's parked entries. Scenario: —.
-- [ ] 4.4 Brief narrative change, new `SignalKind` variants, `schema_version` bump, portfolio/org renders, per-repo roadmap thresholds. Scenario: —.
+- 4.1 (stage ⑦) Curation verbs `bet add|admit|defer|kill`; no verb writes `.podras/roadmap.toml` here. Scenario: —.
+- 4.2 (stage ⑧) Harvest extension: `identity_review` when `next_review` passes, `retire_or_reshape` as a candidate row, never a mutation. Scenario: —.
+- 4.3 A second parked list, or any roadmap-side copy of curation's parked entries. Scenario: —.
+- 4.4 Brief narrative change, new `SignalKind` variants, `schema_version` bump, portfolio/org renders, per-repo roadmap thresholds. Scenario: —.
 
 ## 5. Rule-of-5 review fixes
 
