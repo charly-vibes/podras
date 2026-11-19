@@ -1,0 +1,9 @@
+id = "bet-verbs-require-a-scaffolded-roadmap-file"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "bet_verbs_require_a_scaffolded_roadmap_file" }]

@@ -52,6 +52,8 @@ the committed render (on-demand only; per-repo `publish_whisper` opt-in).
 | reads_side_effect_free | invariant | `brief reads mutate nothing; identical inputs under --as-of produce identical semantic output with defined ordering (priority then id); volatile metadata (generated_at) is separated from the semantic payload` | [[brief.v1]] |
 | whisper_content_privacy | invariant | `whisper-derived content (next-action lines, session summaries) appears only in on-demand output; the committed render carries the whisper freshness stamp (observed_at) and no note content unless publish_whisper is explicitly enabled per repository` | [[brief.v1]] |
 | sources_declared | invariant | `beads and git are mandatory sources; openspec is best-effort; whisper notes are light-read (latest branch entry only); a missing or unreadable source produces an explicit per-source warning row — never a render failure and never a silent omission` | [[brief.v1]] |
+| harvest_never_decides | invariant | `every harvest candidate carries kind + summary + ≥1 git-, notes-, or roadmap-sourced evidence ref; the evidence union extends to {kind: git\|notes\|roadmap, ref}; curation and tracker export bytes stay unchanged; focus/parked stay unchanged; exit == 0 on degraded sources` | [[brief.v1]] |
+| harvest_provenance_idempotent | invariant | `two harvest runs over unchanged inputs at one --as-of emit equal candidate sets in the same order; every evidence ref resolves to an existing git object, note entry, or roadmap state file; no repository file changes between runs` | [[brief.v1]] |
 | bounded_defaults | invariant | `the agent envelope defaults are bounded: 1 focus, 15 in flight, 5 recent, 5 blockers, 5 next, 5 parked — plus all warnings unbounded; bounds are declared by the artifact itself` | [[brief.v1]] |
 | curation_location | invariant | `curation state lives in .podras/curation.toml, git-committed: a purpose-lite one-liner plus focus and parked entries (id, reason, focused_since/parked_at, confirmed_at, resurface trigger); the focus and park verbs write it; humans may hand-edit it; agents are instructed never to (AGENTS.md managed block)` | [[brief.v1]] |
 | enforcement_routed | invariant | `every row states its tier: tier 1 — enforced by spk lint over this corpus (table schema, reference typing, graph shape); tier 2 — enforced by the property suite declared below once the CLI exists (red until implementation, per the house red→green discipline); tier 3 — runtime rows (envelope fields, committed-render policy) enforced via fixture fixtures through the compile/verify pipeline in v1.1` | [[brief.v1]] |
@@ -96,8 +98,8 @@ Curation-item lifecycle (one item of work in a repository):
 | curation_file_shape | unit | [[brief.v1.curation_location]] | `curation_toml_at_default_path_with_focus_and_parked()` | `parsed focus/parked entries round-trip equal to written entries ∧ purpose_lite present` |
 | bounds_declared | unit | [[brief.v1.bounded_defaults]] | `fixture_repo_with_many_items_per_section()` | `envelope section counts == declared bounds (1 focus, 15 in flight, 5 recent, 5 blockers, 5 next, 5 parked) ∧ warnings section unbounded` |
 | in_flight_truncated | unit | [[brief.v1.never_silently_truncate]] | `fixture_repo_with_more_than_fifteen_in_flight_items()` | `envelope keeps 15 in flight ∧ omitted_counts.in_flight == total - 15 ∧ truncation.applied == true` |
-| harvest_candidates_never_decisions | unit | [[brief.v1.sources_declared]] | `harvest_run_on_fixture_repo_with_orphan_commit_and_unlinked_spec_change()` | `every candidate carries kind + summary + ≥1 git-or-notes evidence ref ∧ curation and tracker export bytes unchanged ∧ focus/parked unchanged ∧ exit == 0` |
-| harvest_idempotent_provenance | unit | [[brief.v1.sources_declared]] | `harvest_run_twice_on_fixture_repo()` | `candidate sets equal and ordered across runs ∧ every evidence ref resolves to an existing git object or note entry ∧ no repository file changes between runs` |
+| harvest_candidates_never_decisions | unit | [[brief.v1.harvest_never_decides]] | `harvest_run_on_fixture_repo_with_orphan_commit_and_unlinked_spec_change()` | `every candidate carries kind + summary + ≥1 git-, notes-, or roadmap-sourced evidence ref ∧ curation and tracker export bytes unchanged ∧ focus/parked unchanged ∧ exit == 0` |
+| harvest_idempotent_provenance | unit | [[brief.v1.harvest_provenance_idempotent]] | `harvest_run_twice_on_fixture_repo()` | `candidate sets equal and ordered across runs ∧ every evidence ref resolves to an existing git object, note entry, or roadmap state file ∧ no repository file changes between runs` |
 | freshness_thresholds_declared | unit | [[brief.v1.per_source_freshness]] | `fixture_repo_with_on_horizon_and_past_horizon_sources()` | `thresholds read beads 7 ∧ git 7 ∧ openspec 14 ∧ whisper 14 ∧ curation 14, once each ∧ on-horizon == fresh ∧ one-day-past == stale ∧ impaired mandatory source downgrades green to amber (basis human) naming the source` |
 | as_of_reproducible_render | unit | [[brief.v1.reads_side_effect_free]] | `brief_run_twice_as_of_2026_11_18()` | `payloads equal after removing generated_at ∧ BRIEF.json renders differ only in generated_at ∧ BRIEF.md freshness stamp differs only in generated_at value ∧ boundary verdicts do not flip between runs` |
 | drift_gate_detects_stale_render | unit | [[brief.v1.derived_never_authored]] | `brief_drift_gate_on_stale_render()` | `gate exits 0 on match ∧ exits non-zero naming the divergent artifact on drift ∧ never writes the working tree ∧ no committed renders is a no-op` |
@@ -365,7 +367,7 @@ runtime tier is claimed: `spk lint openspec/specs` SHALL pass with no issues.
 
 `podras harvest [--json] [--as-of <date>]` SHALL extract typed candidates from
 whisper notes, git, and the spec store. Every candidate SHALL carry `kind`,
-`summary`, and at least one `{kind: git|notes, ref}` evidence entry;
+`summary`, and at least one `{kind: git|notes|roadmap, ref}` evidence entry;
 evidence-free candidates SHALL NOT be emitted. Harvest SHALL be idempotent,
 SHALL NOT write curation, create or close issues, or change focus/parked state,
 and SHALL exit 0 on degraded sources. Output is on-demand only: no committed
@@ -374,7 +376,7 @@ artifact or `--write`/`--out-dir`.
 #### Scenario: harvest_candidates_never_decisions
 
 - **WHEN** `podras harvest --json` runs on a fixture repository whose notes, git history, and spec store contain an orphan commit, an unlinked spec change, and a note reference to a missing tracker id
-- **THEN** every emitted candidate carries a kind, a summary, and at least one git-or-notes evidence ref; the curation file and tracker export bytes are unchanged; focus and parked entries are unchanged; and the command exits 0
+- **THEN** every emitted candidate carries a kind, a summary, and at least one git-, notes-, or roadmap-sourced evidence ref; the curation file and tracker export bytes are unchanged; focus and parked entries are unchanged; and the command exits 0
 - **VERIFIES** [[brief.v1.harvest_candidates_never_decisions]]
 
 #### Scenario: harvest_state_mutation_is_a_violation
@@ -386,7 +388,7 @@ artifact or `--write`/`--out-dir`.
 #### Scenario: harvest_idempotent_provenance
 
 - **WHEN** `podras harvest` runs twice over unchanged inputs with the same `--as-of`
-- **THEN** both runs emit the same candidate set in the same order, every evidence ref resolves to an existing git object or note entry, and no repository file changes between runs
+- **THEN** both runs emit the same candidate set in the same order, every evidence ref resolves to an existing git object, note entry, or roadmap state file, and no repository file changes between runs
 - **VERIFIES** [[brief.v1.harvest_idempotent_provenance]]
 
 ### Requirement: Declared freshness thresholds and fault-resistant verdicts

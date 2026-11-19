@@ -1,0 +1,9 @@
+id = "bet-add-is-deterministic-byte-for-byte"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "bet_add_is_deterministic_byte_for_byte" }]

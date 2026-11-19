@@ -1,0 +1,9 @@
+id = "auto-applying-a-roadmap-candidate-is-a-violation"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "harvest_roadmap_run_writes_nothing" }]

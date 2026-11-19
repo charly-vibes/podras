@@ -1,0 +1,9 @@
+id = "bet-verbs-exit-zero-on-success-and-one-on-domain-error"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "bet_verbs_exit_zero_on_success_and_one_on_domain_error" }]

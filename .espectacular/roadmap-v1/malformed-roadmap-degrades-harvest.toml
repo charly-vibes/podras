@@ -1,0 +1,9 @@
+id = "malformed-roadmap-degrades-harvest"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "harvest_runs_on_fixture_repo_with_malformed_roadmap" }]

@@ -1,0 +1,9 @@
+id = "bet-verbs-refuse-to-write-a-malformed-file"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "bet_verbs_refuse_to_write_a_malformed_file" }]

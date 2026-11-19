@@ -1,0 +1,9 @@
+id = "bet-kill-is-legal-from-every-status"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "bet_kill_is_legal_from_every_status" }]
