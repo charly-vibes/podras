@@ -13,6 +13,7 @@ use std::path::Path;
 use crate::error::{Error, Result};
 use crate::readers::{self, ReadContext};
 
+pub mod bet;
 pub mod focus;
 pub mod init;
 pub mod park;

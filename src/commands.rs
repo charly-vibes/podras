@@ -261,6 +261,44 @@ pub fn park(repo: &Path, id: &str, reason: &str, resurface: &str) -> Result<()> 
     crate::verbs::park::run(repo, id, reason, resurface)
 }
 
+/// Append one shaping bet to the roadmap file (stage 7).
+pub fn bet_add(
+    repo: &Path,
+    id: &str,
+    title: &str,
+    outcome: &str,
+    horizon: &str,
+    appetite_weeks: u32,
+    owner: &str,
+    epic: Option<&str>,
+    as_of: NaiveDate,
+) -> Result<()> {
+    crate::verbs::bet::add(
+        repo, id, title, outcome, horizon, appetite_weeks, owner, epic, as_of,
+    )
+}
+
+/// Admit a shaping bet: the dated shaping-to-committed decision (stage 7).
+pub fn bet_admit(
+    repo: &Path,
+    id: &str,
+    epic: &str,
+    review_or_kill: &str,
+    as_of: NaiveDate,
+) -> Result<()> {
+    crate::verbs::bet::admit(repo, id, epic, review_or_kill, as_of)
+}
+
+/// Defer a shaping, committed, or building bet until its revive trigger.
+pub fn bet_defer(repo: &Path, id: &str, revive_when: &str, as_of: NaiveDate) -> Result<()> {
+    crate::verbs::bet::defer(repo, id, revive_when, as_of)
+}
+
+/// Kill a bet from any status, optionally recording why.
+pub fn bet_kill(repo: &Path, id: &str, reason: Option<&str>, as_of: NaiveDate) -> Result<()> {
+    crate::verbs::bet::kill(repo, id, reason, as_of)
+}
+
 /// Initialize podras state for the repository.
 pub fn init(repo: &Path) -> Result<()> {
     crate::verbs::init::run(repo)

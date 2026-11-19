@@ -57,7 +57,7 @@ pub struct IdentityEntry {
     /// `YYYY-MM-DD` or RFC 3339 review date.
     pub last_reviewed: String,
     /// Date the next review is due; absent means unscheduled.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_review: Option<String>,
 }
 
@@ -78,23 +78,25 @@ pub struct BetEntry {
     /// Human owner.
     pub owner: String,
     /// The single tracker epic backing the bet.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub epic: Option<String>,
     /// Lifecycle state.
     pub status: BetStatus,
-    /// `YYYY-MM-DD` or RFC 3339 admission date.
-    pub admitted_at: String,
+    /// `YYYY-MM-DD` or RFC 3339 admission date; absent until a verb admits
+    /// the bet (`shaping` bets have none — decision 17, stage ⑦).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admitted_at: Option<String>,
     /// `YYYY-MM-DD` or RFC 3339 review date.
     pub last_reviewed: String,
     /// Dated review-or-kill decision; required for `committed`/`building`.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review_or_kill: Option<String>,
     /// Trigger that revives a deferred bet; required for `deferred`, absent
     /// otherwise.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revive_when: Option<String>,
     /// Why the bet was killed, when it was.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub killed_reason: Option<String>,
 }
 
@@ -159,6 +161,33 @@ pub fn load(repo: &Path) -> Result<Option<RoadmapFile>> {
         ),
     })?;
     Ok(Some(file))
+}
+
+/// Serialize and write the roadmap file atomically, canonically.
+///
+/// The canonical shape is `[identity]`, then `[[bets]]` in existing order
+/// (an appended bet last), then `[[no_gos]]`, with every field in decision-17
+/// declaration order and absent `Option` fields omitted, so
+/// `load(save(x)) == x` semantically and two identical verb runs write
+/// identical bytes. The write goes through a sibling temporary file and a
+/// rename, exactly like `curation::save`, so a failed verb never leaves a
+/// half-written state file behind.
+pub fn save(repo: &Path, file: &RoadmapFile) -> Result<()> {
+    let body = toml::to_string_pretty(file).map_err(|error| Error::Domain {
+        code: "roadmap_serialize_error",
+        message: format!("cannot serialize {ROADMAP_REL_PATH}: {error}"),
+        suggestion: None,
+    })?;
+    let path = repo.join(ROADMAP_REL_PATH);
+    let temp = repo
+        .join(".podras")
+        .join(format!(".roadmap.toml.{}.tmp", std::process::id()));
+    std::fs::write(&temp, body)?;
+    if let Err(error) = std::fs::rename(&temp, &path) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(Error::Io(error));
+    }
+    Ok(())
 }
 
 /// Check every semantic rule, returning one message per violation.
@@ -309,10 +338,11 @@ fn bet_violations<'a>(
         )));
     }
 
-    if parse_human_date(&bet.admitted_at).is_none() {
+    if let Some(raw) = bet.admitted_at.as_deref()
+        && parse_human_date(raw).is_none()
+    {
         violations.push(at(format!(
-            "admitted_at `{}` is not a date (YYYY-MM-DD or RFC 3339)",
-            bet.admitted_at
+            "admitted_at `{raw}` is not a date (YYYY-MM-DD or RFC 3339)"
         )));
     }
     if parse_human_date(&bet.last_reviewed).is_none() {

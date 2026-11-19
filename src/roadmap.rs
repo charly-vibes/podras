@@ -96,7 +96,11 @@ fn bet_view(entry: &BetEntry, evaluation_date: NaiveDate) -> BetView {
         owner: entry.owner.clone(),
         epic: entry.epic.clone(),
         status: entry.status,
-        admitted_at: parse_human_date(&entry.admitted_at).unwrap_or(evaluation_date),
+        admitted_at: entry
+            .admitted_at
+            .as_deref()
+            .and_then(parse_human_date)
+            .unwrap_or(evaluation_date),
         last_reviewed: parse_human_date(&entry.last_reviewed).unwrap_or(evaluation_date),
         review_or_kill: entry.review_or_kill.as_deref().and_then(parse_human_date),
         revive_when: entry.revive_when.clone(),
@@ -268,7 +272,7 @@ pub(crate) mod test_support {
             owner: bet.owner.clone(),
             epic: bet.epic.clone(),
             status: bet.status,
-            admitted_at: bet.admitted_at.to_string(),
+            admitted_at: Some(bet.admitted_at.to_string()),
             last_reviewed: bet.last_reviewed.to_string(),
             review_or_kill: bet.review_or_kill.map(|date| date.to_string()),
             revive_when: bet.revive_when.clone(),
