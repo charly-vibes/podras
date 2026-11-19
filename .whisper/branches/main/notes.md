@@ -341,4 +341,43 @@
   User picks the next thread. Candidates: fixture authored_with regeneration, CORR-003 as a deliberate change (admit epic id soft-check), roadmap-v1 Purpose prose still says no verb writes roadmap.toml (stale after stage 7 — fold into a future deliberate change), or new work.
   ## References
   - openspec/changes/archive/2026-11-19-add-bet-lifecycle-verbs/ and 2026-11-19-add-harvest-roadmap-candidates/
-  - docs/design.md decisions 17, 21-23, 26; podras-jrn (closed) (supersedes be736bbc119344aea3562710550ae84ad156283c449d7e6acbb40dab731bc94d)
+  - docs/design.md decisions 17, 21-23, 26; podras-jrn (closed) (supersedes be736bbc119344aea3562710550ae84ad156283c449d7e6acbb40dab731bc94d) (superseded by dcce15a46bc71186dfbb91a87683d9b3f660be99269481dee6a80b2676e45dff)
+- 2026-11-19T19:53:11Z [id:dcce15a46bc71186dfbb91a87683d9b3f660be99269481dee6a80b2676e45dff] (#resume-podras-brief) Format: 1
+  2026-11-19T19:52:49Z | repo: charly-vibes/podras | branch: main | HEAD: 4cf1bf9 | session: podras-archive-stages78-2026-11-19
+  Task: stages 7+8 archived with archive-time spec sync, rule-of-5 review complete, findings tracked. Phase: COMMIT (landed) + REVIEW (done, one finding routed to human).
+  Previous entry: be4336361f86713d8e8f6e48b7babfea41e916d8153377a01b0b0404b973476a
+  ## Objective
+  podras roadmap lens stages 7/8 lifecycle closed: implementation, review fixes, archive, archive-time spec sync, contract deployment, renders, review.
+  ## State
+  - Commits e98f6d5 (archive + spec sync, 33 paths) and 4cf1bf9 (chore: podras-jrn closed, beads export, session handoff) pushed; origin/main up to date.
+  - Spec sync landed: roadmap-v1 constraints/properties/Non-Goals updated per the two changes' D8 rows; brief-v1 gained harvest_never_decides + harvest_provenance_idempotent constraints (renamed from design ids — unique_id collisions); 15 scenario VERIFIES bullets retargeted to property rows (house convention the stale deltas had regressed); 4 scenarios added for uncited rows + negative scenario auto_applying_a_roadmap_candidate_is_a_violation.
+  - 19 espectacular contract tomls in .espectacular/roadmap-v1/ (generators = test fns; retire-or-reshape cites two tests). Renders regenerated at --as-of 2026-11-18.
+  - Rule-of-5 review (advisory): CORR-001 HIGH kept REVIEW_REQUIRED@0.40<0.8 gate (TypeSafe; state window excluded corroborating sections — below-gate is inconclusive, not refutation) — roadmap-v1 Purpose lines 28-31 still say "No verb writes it in this stage"; ESCALATE_TO_HUMAN. CLAR-001 MEDIUM brief-v1 Non-Goals:35 stale stage framing. EDGE-001 LOW: ah check --run-tests never exercised. Filed podras-6gq (P3, open) covering the prose fixes.
+  - No open beads besides podras-6gq; zero pending openspec changes.
+  ## Validation (this session, post-edit)
+  cargo test all suites green; ah lint 0; ah check exit 0; spk lint openspec clean; openspec validate --specs --strict 2/2; changes 0 pending; brief-drift green; git status -sb in sync after push 262c857..4cf1bf9.
+  ## Constraints / authorization
+  Standing push authorization for podras only (exercised). House: TDD red->green; spec/narrative changes via deliberate openspec change; agents never edit .podras/roadmap.toml; admission/deferral/kill human verbs.
+  ## Next action
+  Human signs off CORR-001, then podras-6gq lands as one small deliberate openspec change (rewrite roadmap-v1 Purpose paragraph + reword brief-v1 Non-Goals line 35). Otherwise user picks a thread: CORR-003 as deliberate change (admit epic-id soft-check), fixture authored_with regeneration, or new work.
+  ## References
+  openspec/changes/archive/2026-11-19-add-bet-lifecycle-verbs/ and 2026-11-19-add-harvest-roadmap-candidates/; docs/design.md decisions 17, 21-23, 26; tickets podras-jrn (closed), podras-6gq (open). (supersedes be4336361f86713d8e8f6e48b7babfea41e916d8153377a01b0b0404b973476a) (superseded by 5224a759113bc58568995d7625a176db6bc0651ef68d5ed2015fd93aae2cdc74)
+- 2026-11-19T20:04:42Z [id:5224a759113bc58568995d7625a176db6bc0651ef68d5ed2015fd93aae2cdc74] (#resume-podras-brief) Format: 1
+  2026-11-19T20:04:42Z | repo: charly-vibes/podras | branch: main | HEAD: 4cf1bf9 | session: podras-6gq-prose-2026-11-19
+  Task: podras-6gq landed via update-stale-stage-framing (CORR-001/CLAR-001 prose fixes); archived; zero open beads. Phase: COMMIT (commit+push pending at save time).
+  Previous entry: dcce15a46bc71186dfbb91a87683d9b3f660be99269481dee6a80b2676e45dff
+  ## Objective
+  Clear the rule-of-5 stale-stage-framing findings: roadmap-v1 Purpose claimed "No verb writes it in this stage"; brief-v1 Non-Goals framed bet verbs as future roadmap-v1 stage ⑦.
+  ## State
+  - Change update-stale-stage-framing scaffolded, implemented, validated, archived same-session as 2026-11-19-update-stale-stage-framing (archiver 0-apply: spec edits identical to delta).
+  - roadmap-v1 Purpose now states the stage ⑦ bet verbs (named: bet add|admit|defer|kill) are the only writers and the stage ⑧ harvest extension only proposes advisory candidates; "Read-only lens" requirement writers clause names the verbs; brief-v1 Non-Goals bullet reworded to ownership framing.
+  - Strict 500-char requirement limit: clause trim dropped ", stage ⑦" and "instead" (was 560 incl title; prior session had trimmed to just under limit) — --specs --strict 2/2 green after.
+  - podras-6gq closed; no open beads; zero pending changes. Prior handoff's pending .whisper notes.md entry (dcce15a4) commits with this session.
+  ## Validation (this session, post-edit)
+  ah lint 0; ah check 0 (contract tests skipped — EDGE-001 LOW, ah check --run-tests still never exercised); spk lint clean; brief-drift green; openspec validate --specs --strict 2/2 and change --strict green. cargo test not run: narrative-only change, no code paths touched.
+  ## Constraints / authorization
+  Standing push authorization for podras only (exercising now). House: TDD red->green; spec changes via deliberate openspec change; agents never edit .podras/roadmap.toml; admission/deferral/kill human verbs.
+  ## Next action
+  Commit and push (in flight). Then user picks next thread: CORR-003 as deliberate change (admit epic-id soft-check), fixture authored_with regeneration, exercise ah check --run-tests, or new work.
+  ## References
+  openspec/changes/archive/2026-11-19-update-stale-stage-framing/; podras-6gq (closed). (supersedes dcce15a46bc71186dfbb91a87683d9b3f660be99269481dee6a80b2676e45dff) (supersedes dcce15a46bc71186dfbb91a87683d9b3f660be99269481dee6a80b2676e45dff)

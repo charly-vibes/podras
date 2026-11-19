@@ -32,7 +32,7 @@ the committed render (on-demand only; per-repo `publish_whisper` opt-in).
 ## Non-Goals
 
 - Portfolio or organization-level aggregation across repositories.
-- Bet lifecycle verbs (`bet add|admit|defer|kill`) — roadmap-v1 stage ⑦.
+- Bet lifecycle verbs (`bet add|admit|defer|kill`) — a roadmap-v1 capability; the brief envelope carries no bet mutations.
 - Harvest mutations: writing curation, creating or closing issues, or changing focus/parked state; no committed harvest artifact or `--write`/`--out-dir`.
 - A roadmap-side parked list duplicating curation's parked entries.
 - New `SignalKind` variants, `schema_version` bumps, or per-repo configurable thresholds — the envelope evolves additively within `brief.v1` only.

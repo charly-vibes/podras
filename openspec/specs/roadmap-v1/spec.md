@@ -25,8 +25,9 @@ the brief read path, emits the same envelope, and writes committed `ROADMAP.md`
 / `ROADMAP.json` renders via `--write`. State lives in `.podras/roadmap.toml`, a
 git-committed sibling of `curation.toml` that verbs and humans write and agents
 never edit (decision 17, enforced textually by the AGENTS.md managed block,
-decision 25). No verb writes it in this stage: `bet add|admit|defer|kill` are
-stage ⑦ and the harvest extension is stage ⑧.
+decision 25). The stage ⑦ bet verbs (`bet add|admit|defer|kill`) are the only
+writers of that file; the stage ⑧ harvest extension only proposes advisory
+candidates and writes nothing.
 
 Design gate: the corpus topic `value-prop-roadmap` (12 providers, synthesized
 2026-11-18) resolves the three open structural questions. Parked tasks stay in
@@ -253,10 +254,10 @@ full-envelope `ROADMAP.json`.
 
 `podras roadmap` SHALL re-emit the brief envelope. A malformed or unreadable
 `.podras/roadmap.toml` SHALL be a hard domain error there, an absent one
-`roadmap_missing`; `podras brief` SHALL instead omit `roadmap` and exit 0,
+`roadmap_missing`; `podras brief` SHALL omit `roadmap` and exit 0,
 appending one curation-sourced warning. The read verbs SHALL never write
-the file; the stage ⑦ bet verbs are its only writers, and agents never edit
-it.
+the file; the bet verbs (`bet add|admit|defer|kill`) are its only writers,
+and agents never edit it.
 The lens SHALL render enums and constraints, not prose. `podras init` SHALL
 add two roadmap AGENTS.md lines.
 
