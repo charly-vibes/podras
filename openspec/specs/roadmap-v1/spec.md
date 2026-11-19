@@ -48,6 +48,13 @@ envelope merely gains one optional object.
 | additive_optional_envelope | invariant | `roadmap{} is an optional top-level object added to the existing brief envelope and schema_version stays the literal brief.v1; an absent roadmap.toml omits it while a present file with zero bets is a present lens (bets: []); it is bounded (5 bets, 5 no-gos, all warnings) and deterministically ordered — bets by status rank building/committed/deferred/shaping/shipped/killed, then admitted_at, then id; no-gos by id; truncation counts bets and no-gos while parked omissions stay brief-level` | [[roadmap.v1]] |
 | read_only_no_mutation | invariant | `podras roadmap and podras brief read the roadmap state and mutate nothing; no verb writes .podras/roadmap.toml in this stage; identical inputs under --as-of produce identical semantic output, with only generated_at varying, and no roadmap warning enters the health verdict` | [[roadmap.v1]] |
 
+## Non-Goals
+
+- Bet lifecycle verbs (`bet add|admit|defer|kill`) — stage ⑦, a deliberate later change.
+- Harvest extension (`identity_review`, `retire_or_reshape` candidates) — stage ⑧; harvest never mutates roadmap state here.
+- A second parked list, or any roadmap-side copy of curation's parked entries.
+- Brief narrative changes, new `SignalKind` variants, `schema_version` bumps, portfolio/org renders, or per-repo roadmap thresholds.
+
 ## Model
 
 Bet lifecycle (one commitment in the roadmap lens):
@@ -105,7 +112,13 @@ owner, horizon, and at most one epic; neither SHALL be inferred from the other.
 
 - **WHEN** `podras roadmap --json` and `podras brief --json` run on a fixture repository that has a curation focus, a parked entry whose resurface date has passed, and a `now` bet
 - **THEN** the roadmap lens renders the identity row, the bets, and the no-gos, and its not-now column lists the curation parked entries and then the expired entry marked `(needs re-triage: resurface trigger expired)`; the brief's focus and parked sections render only curation entries; no bet appears as focus, no focus entry appears as a bet, and both commands exit 0
-- **VERIFIES** [[roadmap.v1.separate_lens]]
+- **VERIFIES** [[roadmap.v1.lens_separate_from_now_lens]]
+
+#### Scenario: bet_in_brief_sections_is_a_violation
+
+- **WHEN** `podras brief --json` runs on a repository that also has a `now` bet
+- **THEN** the brief's focus and parked sections render only curation entries and no bet id appears in any computed brief column — rendering a bet as focus or parked is a lens-separation violation
+- **VERIFIES** [[roadmap.v1.lens_separate_from_now_lens]]
 
 ### Requirement: Roadmap state file shape and closed lifecycles
 
@@ -121,13 +134,13 @@ TOML syntax error or unknown key or enum member SHALL fail as
 
 - **WHEN** a roadmap file at the default path with `[identity]`, `[[bets]]`, and `[[no_gos]]` entries is parsed and written back, and a second file has a duplicate bet id, a non-slug id, a 61-character title, and `appetite_weeks = 0`
 - **THEN** the parsed identity, bets, and no-gos round-trip equal to the written entries; the invalid file is rejected as one `roadmap_invalid` error naming every violation; and a file with an unknown key is rejected as `roadmap_parse_error`
-- **VERIFIES** [[roadmap.v1.roadmap_state_file]]
+- **VERIFIES** [[roadmap.v1.roadmap_file_shape]]
 
 #### Scenario: bet_lifecycle_enums
 
 - **WHEN** roadmap files carry every declared `status` and `horizon` member, then one committed bet without `review_or_kill`, one deferred bet without `revive_when`, and one committed bet carrying `revive_when`
 - **THEN** the valid file parses with the declared enum members intact, and each invalid file is rejected with `roadmap_invalid` naming the offending bet and rule
-- **VERIFIES** [[roadmap.v1.bet_lifecycle_closed]]
+- **VERIFIES** [[roadmap.v1.bet_lifecycle_enums]]
 
 ### Requirement: Identity is linked, never generated
 
@@ -142,7 +155,13 @@ never arise otherwise. The `identity_review_overdue` advisory SHALL fire when
 
 - **WHEN** a roadmap file without `next_review`, one whose `next_review` is before the evaluation date, and one whose `next_review` equals or follows it are evaluated
 - **THEN** the first reports `staleness = unknown` with an `identity_review_overdue` advisory whose detail says no next review is declared, the second reports `stale` with the advisory naming the passed date, the third reports `fresh` with no such advisory, and nothing without a future `next_review` reports `fresh`
-- **VERIFIES** [[roadmap.v1.identity_linked_never_generated]]
+- **VERIFIES** [[roadmap.v1.identity_staleness_never_fresh]]
+
+#### Scenario: fresh_is_never_reported_without_next_review
+
+- **WHEN** an identity row carries a description field and no `next_review`
+- **THEN** the lens renders only `identity.path`, `last_reviewed`, `next_review`, and `staleness` — the prose is never rendered or rewritten — and `staleness` is `unknown`; reporting `fresh` without a future `next_review` is a staleness violation
+- **VERIFIES** [[roadmap.v1.identity_staleness_never_fresh]]
 
 ### Requirement: No-gos are boundaries, flagged and never enforced by mutation
 
@@ -158,7 +177,7 @@ and nothing SHALL be mutated.
 
 - **WHEN** a fixture tracker has an open bead titled `auto-close`, another titled `autoclose`, a third titled `auto-close` with U+2010 in place of the hyphen, and a no-go whose `match_terms` is `auto-close`, plus a no-go with empty `match_terms`
 - **THEN** exactly two `no_go_violation_candidate` warnings name the two whole-token matches and their term, the `autoclose` bead is not flagged, the empty-term no-go fires nothing, and no repository or tracker byte changes
-- **VERIFIES** [[roadmap.v1.warnings_never_verdict]]
+- **VERIFIES** [[roadmap.v1.no_go_violation_flags_only]]
 
 ### Requirement: Roadmap health is named warnings, never a verdict
 
@@ -174,7 +193,13 @@ auto-kill or auto-promote.
 
 - **WHEN** small fixture repositories, each with at most five bets so no bet is truncated, respectively hold a building bet past `appetite_weeks` times 1.25, another building bet past `appetite_weeks` but below that factor, a committed bet without an epic, a shipped bet without an epic, an active bet whose epic is closed, an active bet whose epic has not changed for 15 days, a `now` bet with no open epic, a `shipped` bet whose epic sits under `later`, an active bet whose `review_or_kill` has passed, and an identity whose `next_review` has passed
 - **THEN** each repository's corresponding code appears in `roadmap.warnings`, the shipped bet with a mismatched horizon fires no `horizon_epic_mismatch`, `health.signals` carries no roadmap code and the verdict is unchanged by them, every command exits 0, and no roadmap, curation, or tracker byte changes
-- **VERIFIES** [[roadmap.v1.warnings_never_verdict]]
+- **VERIFIES** [[roadmap.v1.roadmap_warnings_not_verdict]]
+
+#### Scenario: promoting_a_warning_to_the_verdict_is_a_violation
+
+- **WHEN** any roadmap warning fires
+- **THEN** `health.signals` keeps its v1 members and the verdict is unchanged — promoting a roadmap warning into the health verdict is a layering violation, and the exit stays 0
+- **VERIFIES** [[roadmap.v1.roadmap_warnings_not_verdict]]
 
 ### Requirement: Additive, bounded, deterministic envelope
 
@@ -190,7 +215,13 @@ full-envelope `ROADMAP.json`.
 
 - **WHEN** `podras brief --json` runs on a repository with no roadmap file, on one with a roadmap file whose bets are empty, and on one with seven bets and seven no-gos where the bound drops a `shipped` bet without an epic (which would otherwise fire `bet_epic_missing`) and a `killed` bet, twice each at the same `--as-of`
 - **THEN** the first envelope carries no `roadmap` object, the second carries a present lens with `bets: []` and an identity row, the third keeps exactly five bets in the declared status-rank then `admitted_at` then `id` order and five no-gos by `id` with `truncation.applied = true` and `omitted_counts` naming bets and no_gos, no warning names a dropped bet, `review_due` reflects the retained bets only, every envelope reports `schema_version = "brief.v1"`, and the two runs of each case are identical apart from `generated_at`
-- **VERIFIES** [[roadmap.v1.additive_optional_envelope]]
+- **VERIFIES** [[roadmap.v1.roadmap_envelope_additive_bounded]]
+
+#### Scenario: rows_exceeding_the_bound_are_counted
+
+- **WHEN** the roadmap file holds seven bets and seven no-gos
+- **THEN** exactly five bets and five no-gos survive in the declared order and `truncation.omitted_counts` names bets and no_gos; dropping rows without accounting would violate the additive-bounded contract
+- **VERIFIES** [[roadmap.v1.roadmap_envelope_additive_bounded]]
 
 ### Requirement: Read-only lens with an agent-facing surface
 
@@ -206,4 +237,4 @@ SHALL add two roadmap AGENTS.md lines.
 
 - **WHEN** `podras roadmap --json --as-of 2026-11-18` and `podras roadmap --write --as-of 2026-11-18` each run twice on an unchanged fixture repository with a roadmap file, then the file is corrupted and both `podras brief` and `podras roadmap` run, then the file is removed and both run again, and `podras init` runs twice
 - **THEN** the two payloads are equal after removing `generated_at`, the two renders differ only in `generated_at`, `ROADMAP.md` carries the lens sections only while `ROADMAP.json` carries the full brief envelope, no repository byte outside the `--write` targets changes, the corrupted file is a `roadmap_parse_error` or `roadmap_invalid` domain error from `podras roadmap` while `podras brief` omits `roadmap`, appends one curation-sourced warning carrying that code, leaves the five declared `sources[]` rows unchanged, and exits 0, the absent file reports `roadmap_missing` from `podras roadmap` while `podras brief` omits the object and exits 0, and the AGENTS.md block contains both roadmap lines while the second init is byte-identical
-- **VERIFIES** [[roadmap.v1.read_only_no_mutation]]
+- **VERIFIES** [[roadmap.v1.roadmap_read_only]]
