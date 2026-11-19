@@ -17,6 +17,7 @@ mod detectors;
 mod git;
 mod notes;
 mod render;
+mod roadmap;
 mod specs;
 
 use std::path::Path;
@@ -57,14 +58,20 @@ pub enum CandidateKind {
     OrphanCommit,
     /// A window spec change links no tracker id in its id or title.
     UnlinkedSpecChange,
+    /// A non-terminal bet trips a retire-or-reshape predicate.
+    RetireOrReshape,
+    /// The identity review schedule has passed.
+    IdentityReview,
 }
 
 impl CandidateKind {
     /// Every kind, in declaration order.
-    pub const ALL: [CandidateKind; 3] = [
+    pub const ALL: [CandidateKind; 5] = [
         CandidateKind::NoteReferenceUnresolved,
         CandidateKind::OrphanCommit,
         CandidateKind::UnlinkedSpecChange,
+        CandidateKind::RetireOrReshape,
+        CandidateKind::IdentityReview,
     ];
 
     /// Serialized name, matching `serde`.
@@ -73,6 +80,8 @@ impl CandidateKind {
             CandidateKind::NoteReferenceUnresolved => "note_reference_unresolved",
             CandidateKind::OrphanCommit => "orphan_commit",
             CandidateKind::UnlinkedSpecChange => "unlinked_spec_change",
+            CandidateKind::RetireOrReshape => "retire_or_reshape",
+            CandidateKind::IdentityReview => "identity_review",
         }
     }
 }
@@ -85,6 +94,8 @@ pub enum EvidenceKind {
     Git,
     /// A notes path plus the entry timestamp.
     Notes,
+    /// The roadmap state file, `.podras/roadmap.toml`.
+    Roadmap,
 }
 
 impl EvidenceKind {
@@ -93,6 +104,7 @@ impl EvidenceKind {
         match self {
             EvidenceKind::Git => "git",
             EvidenceKind::Notes => "notes",
+            EvidenceKind::Roadmap => "roadmap",
         }
     }
 }
@@ -137,11 +149,20 @@ pub fn assemble(repo: &Path, inputs: &BriefInputs) -> Harvest {
 
     detectors::sort_and_dedupe(&mut candidates);
 
+    // Roadmap candidates keep their own contract order (lens status rank,
+    // admitted_at, id; identity last), so they append after the generic sort.
+    let (roadmap_candidates, roadmap_warning) =
+        roadmap::candidates(repo, detectors::evaluation_date(inputs));
+    candidates.extend(roadmap_candidates);
+
+    let mut warnings = inputs.warnings.clone();
+    warnings.extend(roadmap_warning);
+
     Harvest {
         schema_version: SCHEMA_VERSION.to_string(),
         generated_at: inputs.generated_at,
         sources: inputs.sources.clone(),
         candidates,
-        warnings: inputs.warnings.clone(),
+        warnings,
     }
 }

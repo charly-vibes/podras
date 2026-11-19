@@ -59,6 +59,35 @@ pub(super) fn identity(file: &RoadmapFile, evaluation_date: NaiveDate) -> Identi
     }
 }
 
+/// True when the bet's age passes the circuit-breaker threshold.
+///
+/// Shared with harvest's `retire_or_reshape` detector so the lens and the
+/// candidate can never disagree about the 1.25x rule (decision 23).
+pub(crate) fn circuit_breaker_overrun(
+    admitted_at: NaiveDate,
+    appetite_weeks: u32,
+    evaluation_date: NaiveDate,
+) -> bool {
+    let appetite_days = i64::from(appetite_weeks) * 7;
+    let age_days = (evaluation_date - admitted_at).num_days();
+    age_days as f64 > appetite_days as f64 * CIRCUIT_BREAKER_FACTOR
+}
+
+/// The tracker record backing a declared epic id, when the export carries one.
+pub(crate) fn epic_record<'a>(
+    epic: Option<&str>,
+    records: &'a [IssueRecord],
+) -> Option<&'a IssueRecord> {
+    epic.and_then(|id| records.iter().find(|record| record.id == id))
+}
+
+/// Days since the epic's last tracker transition, when the export carries one.
+pub(crate) fn epic_idle_days(record: &IssueRecord, evaluation_date: NaiveDate) -> Option<i64> {
+    record
+        .updated_at
+        .map(|updated_at| (evaluation_date - updated_at.date_naive()).num_days())
+}
+
 /// True for the statuses that count as an active bet.
 pub(super) fn active(status: BetStatus) -> bool {
     matches!(status, BetStatus::Committed | BetStatus::Building)
@@ -133,7 +162,7 @@ fn bet_warnings(
     if active {
         let appetite_days = i64::from(bet.appetite_weeks) * 7;
         let age_days = (evaluation_date - bet.admitted_at).num_days();
-        if age_days as f64 > appetite_days as f64 * CIRCUIT_BREAKER_FACTOR {
+        if circuit_breaker_overrun(bet.admitted_at, bet.appetite_weeks, evaluation_date) {
             warnings.push(RoadmapWarning {
                 code: RoadmapWarningKind::CircuitBreakerDue,
                 subject: bet.id.clone(),
@@ -173,10 +202,7 @@ fn bet_warnings(
         });
     }
 
-    let epic = bet
-        .epic
-        .as_deref()
-        .and_then(|epic| records.iter().find(|record| record.id == epic));
+    let epic = epic_record(bet.epic.as_deref(), records);
 
     if let Some(record) = epic {
         if active && !record.open {
@@ -186,8 +212,7 @@ fn bet_warnings(
                 detail: format!("epic `{}` is closed while the bet is active", record.id),
             });
         }
-        if active && let Some(updated_at) = record.updated_at {
-            let idle_days = (evaluation_date - updated_at.date_naive()).num_days();
+        if active && let Some(idle_days) = epic_idle_days(record, evaluation_date) {
             if idle_days > SIGNAL_HORIZON_DAYS {
                 warnings.push(RoadmapWarning {
                     code: RoadmapWarningKind::BetNoTransition,

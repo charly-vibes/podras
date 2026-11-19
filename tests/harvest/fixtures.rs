@@ -238,7 +238,7 @@ pub(crate) fn assert_human_render(repo: &common::TempRepo) {
     let quiet_human = narrate(&quiet_fixture());
     assert_eq!(
         quiet_human.matches("  none").count(),
-        3,
+        5,
         "empty groups are explicit, never omitted: {quiet_human}"
     );
 }

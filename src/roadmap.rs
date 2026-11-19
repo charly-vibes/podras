@@ -34,6 +34,9 @@ use file::{BetEntry, NoGoEntry};
 
 pub use file::{ROADMAP_REL_PATH, RoadmapFile, load};
 
+/// Predicates shared with harvest's `retire_or_reshape` detector.
+pub(crate) use warnings::{circuit_breaker_overrun, epic_idle_days, epic_record};
+
 /// Assemble the roadmap lens for one evaluation date.
 ///
 /// `file` is expected to come from [`load`], which validates slugs, enums,
