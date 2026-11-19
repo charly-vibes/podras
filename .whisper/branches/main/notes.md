@@ -380,4 +380,22 @@
   ## Next action
   Commit and push (in flight). Then user picks next thread: CORR-003 as deliberate change (admit epic-id soft-check), fixture authored_with regeneration, exercise ah check --run-tests, or new work.
   ## References
-  openspec/changes/archive/2026-11-19-update-stale-stage-framing/; podras-6gq (closed). (supersedes dcce15a46bc71186dfbb91a87683d9b3f660be99269481dee6a80b2676e45dff) (supersedes dcce15a46bc71186dfbb91a87683d9b3f660be99269481dee6a80b2676e45dff)
+  openspec/changes/archive/2026-11-19-update-stale-stage-framing/; podras-6gq (closed). (supersedes dcce15a46bc71186dfbb91a87683d9b3f660be99269481dee6a80b2676e45dff) (supersedes dcce15a46bc71186dfbb91a87683d9b3f660be99269481dee6a80b2676e45dff) (superseded by f31ca4aed907318b53aeb121696b630c1a167e21b16ac00aa58d13e2f1390116)
+- 2026-11-19T20:10:38Z [id:f31ca4aed907318b53aeb121696b630c1a167e21b16ac00aa58d13e2f1390116] (#resume-podras-brief) 2026-11-19T20:10:38Z | repo: charly-vibes/podras | branch: main | HEAD: 1ea12f0 | session: podras-6gq-prose-2026-11-19
+  Task: podras-6gq landed via update-stale-stage-framing (CORR-001/CLAR-001 prose fixes); archived; zero open beads. Phase: DONE (landed 1ea12f0, pushed; origin in sync). Re-appended to drop a duplicated supersedes marker..
+  Previous entry: 5224a759113bc58568995d7625a176db6bc0651ef68d5ed2015fd93aae2cdc74
+  ## Objective
+  Clear the rule-of-5 stale-stage-framing findings: roadmap-v1 Purpose claimed "No verb writes it in this stage"; brief-v1 Non-Goals framed bet verbs as future roadmap-v1 stage ⑦.
+  ## State
+  - Change update-stale-stage-framing scaffolded, implemented, validated, archived same-session as 2026-11-19-update-stale-stage-framing (archiver 0-apply: spec edits identical to delta).
+  - roadmap-v1 Purpose now states the stage ⑦ bet verbs (named: bet add|admit|defer|kill) are the only writers and the stage ⑧ harvest extension only proposes advisory candidates; "Read-only lens" requirement writers clause names the verbs; brief-v1 Non-Goals bullet reworded to ownership framing.
+  - Strict 500-char requirement limit: clause trim dropped ", stage ⑦" and "instead" (was 560 incl title; prior session had trimmed to just under limit) — --specs --strict 2/2 green after.
+  - podras-6gq closed; no open beads; zero pending changes. Prior handoff's pending .whisper notes.md entry (dcce15a4) committed in 1ea12f0.
+  ## Validation (this session, post-edit)
+  ah lint 0; ah check 0 (contract tests skipped — EDGE-001 LOW, ah check --run-tests still never exercised); spk lint clean; brief-drift green; openspec validate --specs --strict 2/2 and change --strict green. cargo test not run: narrative-only change, no code paths touched.
+  ## Constraints / authorization
+  Standing push authorization for podras only (exercising now). House: TDD red->green; spec changes via deliberate openspec change; agents never edit .podras/roadmap.toml; admission/deferral/kill human verbs.
+  ## Next action
+  Pushed. User picks next thread: CORR-003 as deliberate change (admit epic-id soft-check), fixture authored_with regeneration, exercise ah check --run-tests, or new work.
+  ## References
+  openspec/changes/archive/2026-11-19-update-stale-stage-framing/; podras-6gq (closed). (supersedes 5224a759113bc58568995d7625a176db6bc0651ef68d5ed2015fd93aae2cdc74)
