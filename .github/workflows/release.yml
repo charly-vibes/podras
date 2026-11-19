@@ -184,6 +184,9 @@ jobs:
             dist/podras_${VERSION}_windows_amd64.zip \
             dist/checksums.txt
         env:
+          # No checkout in this job — gh cannot infer the repo from a local
+          # git remote, so point it at the repository explicitly.
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
