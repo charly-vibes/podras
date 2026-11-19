@@ -300,4 +300,45 @@
   ## Constraints / authorization
   - Standing push authorization for podras only, exercised this session. House rules held: TDD red→green; spec changes via deliberate openspec change; admission/deferral/kill are human verbs; agents never edit .podras/roadmap.toml.
   ## Next action
-  User picks the next thread. Candidates: archive the two pending openspec changes (delta row sync + Non-Goals cleanup), fixture authored_with regeneration, or new work. No blockers.
+  User picks the next thread. Candidates: archive the two pending openspec changes (delta row sync + Non-Goals cleanup), fixture authored_with regeneration, or new work. No blockers. (superseded by be736bbc119344aea3562710550ae84ad156283c449d7e6acbb40dab731bc94d)
+- 2026-11-19T19:06:31Z [id:be736bbc119344aea3562710550ae84ad156283c449d7e6acbb40dab731bc94d] (#resume-podras-brief) Format: 1
+  2026-11-19T23:05:00Z | repo: charly-vibes/podras | branch: main | HEAD: 262c857 | session: podras-bet-harvest-stages-2026-11-19
+  Task: podras roadmap stages 7+8 delivered, rule-of-5 review fixes applied and pushed (origin/main at 262c857). Phase: COMMIT — landed; archive of the two openspec changes is the open thread.
+  Previous entry: bfe06b3ec7633ea713ebb17cc889ac653fcfc81c34058a3cc8a275b9c7b50204
+  ## Objective
+  podras roadmap lens stages 7 (bet lifecycle verbs) and 8 (harvest roadmap candidates), reviewed and fixed.
+  ## State
+  - Stage 7 (cd309f9): podras bet add|admit|defer|kill — shaping→committed admission stamps admitted_at (optional until admission), defer from shaping/committed/building requires revive_when, kill from any status clears forbidden fields, --as-of stamps last_reviewed, canonical atomic save, malformed file blocks writes; start/ship stay hand-edits.
+  - Stage 8 (7655e7a, amended): harvest emits identity_review (iff next_review strictly passed) + retire_or_reshape (circuit_breaker_due | bet_no_transition | bet_epic_closed_not_retired), evidence union git|notes|roadmap, malformed roadmap degrades to zero candidates at exit 0.
+  - Review fixes (262c857, TypeSafe-verified HIGHs): RF-1 unadmitted bets keep epic triggers — circuit breaker ages admitted bets only, sort_key falls back to last_reviewed; RF-2 unadmitted_bet fixture + test; RF-3 module doc states the gating; RF-4 admit prints a note when replacing an existing epic; RF-5 staged property rows split (absent/future identity row, unadmitted-bet row) + invariant records the gating. Review-fix section + tasks.md §6 in add-harvest-roadmap-candidates.
+  - NOT applied by design: CORR-003 (soft-check epic id against tracker export on admit) — recorded as CONSIDER in the review-fix section; needs a deliberate contract change.
+  - Tickets closed: podras-o89/e09 (7), podras-1jj/0k4 (8); beads jsonl export refreshed. No open beads.
+  ## Validation
+  cargo test 26/26 suites; ah lint 0; ah check clean; spk lint ok; openspec validate --specs --strict 2/2 and --changes --strict 2/2; brief-drift green at 01c4e80 (committed render head_sha lags trailing commits — head_sha-only diff).
+  ## Constraints / authorization
+  - Standing push authorization for podras only, exercised through 262c857. House: TDD red->green; spec changes via deliberate openspec change; admission/deferral/kill are human verbs; agents never edit .podras/roadmap.toml.
+  ## Next action
+  Archive the two pending openspec changes (add-bet-lifecycle-verbs, add-harvest-roadmap-candidates) with archive-time delta Constraints/Properties row sync + roadmap-v1 Non-Goals cleanup (drop both stage lines), openspec validate --specs --strict, then regenerate committed renders. Later candidates: fixture authored_with regeneration, CORR-003 as a deliberate change, or new work.
+  ## References
+  - openspec/changes/add-bet-lifecycle-verbs/ and add-harvest-roadmap-candidates/ (design.md holds archive-time delta rows; scenario coverage ledger in tasks.md)
+  - docs/design.md decisions 17, 21-23, 26; review-fix section in add-harvest-roadmap-candidates/design.md (supersedes bfe06b3ec7633ea713ebb17cc889ac653fcfc81c34058a3cc8a275b9c7b50204)
+- 2026-11-19T19:38:36Z [id:be4336361f86713d8e8f6e48b7babfea41e916d8153377a01b0b0404b973476a] (#resume-podras-brief) Format: 1
+  2026-11-19T23:59:00Z | repo: charly-vibes/podras | branch: main | HEAD: e98f6d5564 | session: podras-archive-stages78-2026-11-19
+  Task: the two pending openspec changes (add-bet-lifecycle-verbs, add-harvest-roadmap-candidates) archived with archive-time sync; podras-jrn closed. Zero pending changes, zero open beads.
+  Previous entry: be736bbc119344aea3562710550ae84ad156283c449d7e6acbb40dab731bc94d
+  ## Objective
+  podras roadmap lens stages 7+8: change lifecycle fully closed out after implementation, review fixes, and archive.
+  ## State
+  - openspec archive applied requirement deltas for both changes; specs validated --specs --strict 2/2, --changes 0 pending.
+  - Archive-time sync (podras-jrn): roadmap-v1 constraints scoped (read_only_nomutation, roadmap_read_only) + bet_verbs_only_writers + 2 harvest constraints added; 18 unit property rows added; Non-Goals drops implemented stage-7/8 lines and adds bet start/ship; brief-v1 gains harvest_never_decides + harvest_provenance_idempotent constraints (renamed from design ids to clear unique_id collisions) with property derives_from retargeted to them.
+  - Lint fallout fixed: 15 scenario VERIFIES bullets retargeted from constraint ids to unit property rows (house convention the stale deltas had regressed); added 4 scenarios for uncited property rows + negative scenario auto_applying_a_roadmap_candidate_is_a_violation; read-only requirement prose trimmed under the 500-char strict limit.
+  - 19 espectacular contract tomls deployed in .espectacular/roadmap-v1/ (generators = test fns; retire-or-reshape cites both trigger tests). Renders regenerated (podras brief --write --as-of 2026-11-18).
+  ## Validation (run this session, post-edit)
+  cargo test all suites green; ah lint 0; ah check exit 0; spk lint openspec clean; openspec validate --specs --strict 2/2; brief-drift green at e98f6d5564.
+  ## Constraints / authorization
+  - Standing push authorization for podras only. House: TDD red->green; spec changes via deliberate openspec change; agents never edit .podras/roadmap.toml.
+  ## Next action
+  User picks the next thread. Candidates: fixture authored_with regeneration, CORR-003 as a deliberate change (admit epic id soft-check), roadmap-v1 Purpose prose still says no verb writes roadmap.toml (stale after stage 7 — fold into a future deliberate change), or new work.
+  ## References
+  - openspec/changes/archive/2026-11-19-add-bet-lifecycle-verbs/ and 2026-11-19-add-harvest-roadmap-candidates/
+  - docs/design.md decisions 17, 21-23, 26; podras-jrn (closed) (supersedes be736bbc119344aea3562710550ae84ad156283c449d7e6acbb40dab731bc94d)
