@@ -216,6 +216,33 @@ fn assert_none_line(body: &str, heading: &str) {
 }
 
 #[test]
+fn in_flight_truncated() {
+    let total_in_flight = 18usize;
+    let mut fixture = empty_inputs();
+    fixture.beads = Some(BeadsSummary {
+        open: (0..total_in_flight)
+            .map(|index| item(&format!("open-{index}"), Some(1)))
+            .collect(),
+        blocked: Vec::new(),
+        ready: Vec::new(),
+        observed_at: Some(instant()),
+    });
+
+    let brief = assemble(&fixture);
+    let rendered = markdown::render(&brief, None).expect("render the narrative");
+    let in_flight = section(&rendered, "In flight");
+
+    assert!(
+        in_flight.contains(&format!("({} more omitted)", total_in_flight - 15)),
+        "the in-flight section must account for bound-dropped rows: {in_flight}"
+    );
+    assert!(
+        in_flight.contains("open-0") && !in_flight.contains("open-7"),
+        "the kept slice is the declared priority-then-id prefix: {in_flight}"
+    );
+}
+
+#[test]
 fn focus_not_inferred() {
     let brief = assemble(&curated_fixture());
 

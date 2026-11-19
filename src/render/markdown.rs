@@ -31,7 +31,12 @@ pub fn render(brief: &Brief, reentry: Option<&str>) -> Result<String> {
 
     render_purpose(&mut out, brief, reentry);
     render_work_items(&mut out, "Focus", &brief.focus, omitted(brief, "focus"));
-    render_work_items(&mut out, "In flight", &brief.in_flight, None);
+    render_work_items(
+        &mut out,
+        "In flight",
+        &brief.in_flight,
+        omitted(brief, "in_flight"),
+    );
     render_work_items(
         &mut out,
         "Blocked / waiting",

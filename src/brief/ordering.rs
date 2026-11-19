@@ -12,8 +12,8 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use crate::model::{
-    BLOCKED_BOUND, FOCUS_BOUND, NEXT_BOUND, PARKED_BOUND, ParkedItem, RECENT_BOUND, RecentEvent,
-    Resurface, Truncation, Warning, WorkItem,
+    BLOCKED_BOUND, FOCUS_BOUND, IN_FLIGHT_BOUND, NEXT_BOUND, PARKED_BOUND, ParkedItem,
+    RECENT_BOUND, RecentEvent, Resurface, Truncation, Warning, WorkItem,
 };
 
 use super::sections::Sections;
@@ -65,6 +65,12 @@ pub(crate) fn sort_warnings(warnings: &mut [Warning]) {
 pub(super) fn apply_bounds(mut sections: Sections) -> (Sections, Truncation) {
     let mut omitted_counts: BTreeMap<String, u32> = BTreeMap::new();
     sections.focus = truncate("focus", sections.focus, FOCUS_BOUND, &mut omitted_counts);
+    sections.in_flight = truncate(
+        "in_flight",
+        sections.in_flight,
+        IN_FLIGHT_BOUND,
+        &mut omitted_counts,
+    );
     sections.recent = truncate("recent", sections.recent, RECENT_BOUND, &mut omitted_counts);
     sections.blocked = truncate(
         "blocked",

@@ -1,0 +1,9 @@
+id = "in-flight-truncated"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "in_flight_truncated" }]

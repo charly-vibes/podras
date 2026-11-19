@@ -31,6 +31,8 @@ pub const BLOCKED_BOUND: usize = 5;
 pub const NEXT_BOUND: usize = 5;
 /// Render bound for the parked section.
 pub const PARKED_BOUND: usize = 5;
+/// Render bound for the in-flight section.
+pub const IN_FLIGHT_BOUND: usize = 15;
 
 /// Declared data source for a brief reading.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

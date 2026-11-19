@@ -246,7 +246,7 @@ Envelope (agent render): `schema_version`, `generated_at`, `sources[]`,
 `curation{updated_at, confirmed_at}`, `staleness: fresh|stale|unknown`,
 `truncation{applied, omitted_counts}`, `head_sha`/`source_hash`. Typed
 enums, no prose ("a contract, not a prompt"). Bounded defaults: 1 focus,
-5 recent, 5 blockers, 5 next, 5 parked + all warnings. Human render:
+15 in flight, 5 recent, 5 blockers, 5 next, 5 parked + all warnings. Human render:
 narrative priority order, health verdict with reason + named owner.
 
 Key rules (from corpus, see synthesis for attribution):

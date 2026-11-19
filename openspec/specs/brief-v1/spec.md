@@ -44,7 +44,7 @@ the committed render (on-demand only; per-repo `publish_whisper` opt-in).
 | reads_side_effect_free | invariant | `brief reads mutate nothing; identical inputs under --as-of produce identical semantic output with defined ordering (priority then id); volatile metadata (generated_at) is separated from the semantic payload` | [[brief.v1]] |
 | whisper_content_privacy | invariant | `whisper-derived content (next-action lines, session summaries) appears only in on-demand output; the committed render carries the whisper freshness stamp (observed_at) and no note content unless publish_whisper is explicitly enabled per repository` | [[brief.v1]] |
 | sources_declared | invariant | `beads and git are mandatory sources; openspec is best-effort; whisper notes are light-read (latest branch entry only); a missing or unreadable source produces an explicit per-source warning row — never a render failure and never a silent omission` | [[brief.v1]] |
-| bounded_defaults | invariant | `the agent envelope defaults are bounded: 1 focus, 5 recent, 5 blockers, 5 next, 5 parked — plus all warnings unbounded; bounds are declared by the artifact itself` | [[brief.v1]] |
+| bounded_defaults | invariant | `the agent envelope defaults are bounded: 1 focus, 15 in flight, 5 recent, 5 blockers, 5 next, 5 parked — plus all warnings unbounded; bounds are declared by the artifact itself` | [[brief.v1]] |
 | curation_location | invariant | `curation state lives in .podras/curation.toml, git-committed: a purpose-lite one-liner plus focus and parked entries (id, reason, focused_since/parked_at, confirmed_at, resurface trigger); the focus and park verbs write it; humans may hand-edit it; agents are instructed never to (AGENTS.md managed block)` | [[brief.v1]] |
 | enforcement_routed | invariant | `every row states its tier: tier 1 — enforced by spk lint over this corpus (table schema, reference typing, graph shape); tier 2 — enforced by the property suite declared below once the CLI exists (red until implementation, per the house red→green discipline); tier 3 — runtime rows (envelope fields, committed-render policy) enforced via fixture fixtures through the compile/verify pipeline in v1.1` | [[brief.v1]] |
 
@@ -86,7 +86,8 @@ Curation-item lifecycle (one item of work in a repository):
 | envelope_schema_conform | unit | [[brief.v1.contract_not_prompt]] | `envelope_from_fixture_repo()` | `schema_validate(envelope, published_json_schema_2020_12) == valid ∧ every status field is an enum member` |
 | focus_not_inferred | unit | [[brief.v1.curation_beats_inference]] | `fixture_repo_where_top_priority_differs_from_curation_focus()` | `brief.focus.id == curation focus id ∧ brief.focus.id != tracker top priority id ∧ parked items absent from next section` |
 | curation_file_shape | unit | [[brief.v1.curation_location]] | `curation_toml_at_default_path_with_focus_and_parked()` | `parsed focus/parked entries round-trip equal to written entries ∧ purpose_lite present` |
-| bounds_declared | unit | [[brief.v1.bounded_defaults]] | `fixture_repo_with_many_items_per_section()` | `envelope section counts == declared bounds (1 focus, 5 recent, 5 blockers, 5 next, 5 parked) ∧ warnings section unbounded` |
+| bounds_declared | unit | [[brief.v1.bounded_defaults]] | `fixture_repo_with_many_items_per_section()` | `envelope section counts == declared bounds (1 focus, 15 in flight, 5 recent, 5 blockers, 5 next, 5 parked) ∧ warnings section unbounded` |
+| in_flight_truncated | unit | [[brief.v1.never_silently_truncate]] | `fixture_repo_with_more_than_fifteen_in_flight_items()` | `envelope keeps 15 in flight ∧ omitted_counts.in_flight == total - 15 ∧ truncation.applied == true` |
 | corpus_self_lint | unit | [[brief.v1.enforcement_routed]] | `spk_lint_over_this_corpus()` | `check(openspec/specs) == passed` — the corpus must satisfy its own declared shape before any runtime tier is claimed |
 
 ## Requirements
@@ -155,16 +156,16 @@ that no human has recently confirmed is.
 
 ### Requirement: Bounded sections with declared truncation
 
-The agent envelope SHALL apply bounded defaults: 1 focus, 5 recent, 5 blocked,
-5 next, and 5 parked items, while the warnings list SHALL remain unbounded.
-Whenever any bound removes items, the envelope SHALL set
+The agent envelope SHALL apply bounded defaults: 1 focus, 15 in flight,
+5 recent, 5 blocked, 5 next, and 5 parked items, while the warnings list SHALL
+remain unbounded. Whenever any bound removes items, the envelope SHALL set
 `truncation.applied = true` and SHALL record the per-section removed count in
 `truncation.omitted_counts`. Silent truncation SHALL NOT occur.
 
 #### Scenario: bounds_declared
 
 - **WHEN** a fixture repository has more items per section than the declared bounds
-- **THEN** the envelope section counts equal the declared bounds (1 focus, 5 recent, 5 blocked, 5 next, 5 parked) and the warnings section remains unbounded
+- **THEN** the envelope section counts equal the declared bounds (1 focus, 15 in flight, 5 recent, 5 blocked, 5 next, 5 parked) and the warnings section remains unbounded
 - **VERIFIES** [[brief.v1.bounds_declared]]
 
 #### Scenario: truncation_flagged
@@ -172,6 +173,12 @@ Whenever any bound removes items, the envelope SHALL set
 - **WHEN** a fixture repository produces more than five recent events
 - **THEN** `truncation.applied` is true and `omitted_counts.recent` equals the total recent events minus five
 - **VERIFIES** [[brief.v1.truncation_flagged]]
+
+#### Scenario: in_flight_truncated
+
+- **WHEN** a fixture repository has more than fifteen in-flight items
+- **THEN** the envelope keeps the first fifteen items of the declared priority-then-id order, `truncation.applied` is true, and `omitted_counts.in_flight` equals the total in-flight items minus fifteen
+- **VERIFIES** [[brief.v1.in_flight_truncated]]
 
 ### Requirement: Typed agent envelope
 

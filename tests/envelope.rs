@@ -120,6 +120,37 @@ fn truncation_flagged() {
     );
 }
 
+#[test]
+fn in_flight_truncated() {
+    let total_in_flight = 18usize;
+    let mut fixture = inputs();
+    fixture.beads = Some(BeadsSummary {
+        open: (0..total_in_flight)
+            .map(|index| work_item(&format!("open-{index}"), 1))
+            .collect(),
+        blocked: Vec::new(),
+        ready: Vec::new(),
+        observed_at: Some(instant("2026-11-17T00:00:00Z")),
+    });
+
+    let brief = brief::assemble(&fixture);
+
+    assert_eq!(
+        brief.in_flight.len(),
+        15,
+        "in flight section is bounded to fifteen"
+    );
+    assert!(
+        brief.truncation.applied,
+        "truncation must be declared when in flight is bounded"
+    );
+    assert_eq!(
+        brief.truncation.omitted_counts.get("in_flight").copied(),
+        Some((total_in_flight - 15) as u32),
+        "omitted_counts.in_flight must equal total - bound"
+    );
+}
+
 fn bounds_focus() -> Vec<FocusEntry> {
     (0..3)
         .map(|index| FocusEntry {
@@ -205,6 +236,11 @@ fn bounds_declared() {
     assert_eq!(brief.blocked.len(), 5, "blocked bound");
     assert_eq!(brief.next.len(), 5, "next bound");
     assert_eq!(brief.parked.len(), 5, "parked bound");
+    assert_eq!(
+        brief.in_flight.len(),
+        7,
+        "in flight under bound stays whole"
+    );
     assert_eq!(brief.warnings.len(), 7, "warnings stay unbounded");
 
     let expected = BTreeMap::from([

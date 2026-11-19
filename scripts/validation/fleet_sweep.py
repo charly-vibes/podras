@@ -10,7 +10,7 @@ identical beyond generated_at) · head_sha vs git · declared bounds · health
 layering (green requires basis=human) · curation authority (focus/parked only
 from curation.toml, expired parks in needs_retriage) · beads truth (queues
 never render closed beads, next never leaks curated ids, missing export warns).
-`in_flight` is intentionally unbounded (brief.v1 bounded_defaults).
+`in_flight` is bounded to 15 (brief.v1 bounded_defaults).
 
 Usage: cargo install --path . && python3 scripts/validation/fleet_sweep.py
 Exits non-zero when any repo fails. Local checkouts expected under
@@ -30,8 +30,8 @@ REPOS = {
     "sad": "sad", "gently": "gently", "fabbro": "fabbro", "podras": "podras",
 }
 SOURCE_ORDER = ["beads", "git", "openspec", "whisper", "curation"]
-# in_flight is intentionally unbounded per brief.v1 bounded_defaults (focus/recent/blockers/next/parked only)
-BOUNDS = {"focus": 1, "blocked": 5, "next": 5, "parked": 5, "recent": 5}
+# in_flight is bounded to 15 per brief.v1 bounded_defaults (every computed queue is bounded)
+BOUNDS = {"focus": 1, "in_flight": 15, "blocked": 5, "next": 5, "parked": 5, "recent": 5}
 
 def run_brief(repo):
     p = subprocess.run(["podras", "brief", "--json", "--as-of", AS_OF],
