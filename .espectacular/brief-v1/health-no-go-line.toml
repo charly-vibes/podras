@@ -1,0 +1,9 @@
+id = "health-no-go-line"
+description = ""
+archetype = ""
+status = "active"
+superseded_by = ""
+authored_with = "0.12.3"
+
+[tests]
+cargo = [{ flags = "health_no_go_line" }]

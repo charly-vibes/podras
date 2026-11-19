@@ -201,6 +201,12 @@ auto-kill or auto-promote.
 - **THEN** `health.signals` keeps its v1 members and the verdict is unchanged — promoting a roadmap warning into the health verdict is a layering violation, and the exit stays 0
 - **VERIFIES** [[roadmap.v1.roadmap_warnings_not_verdict]]
 
+#### Scenario: health_no_go_line
+
+- **WHEN** `podras brief --as-of 2026-11-18` runs on a fixture repository whose roadmap file declares a no-go with a match term matching an open bead's title
+- **THEN** the brief's Health section contains exactly one advisory `- no-go risk: <subject> — <detail>` line naming that candidate, `health.signals` stays free of roadmap codes, the exit code stays 0, and no roadmap, curation, or tracker byte changes
+- **VERIFIES** [[roadmap.v1.roadmap_warnings_not_verdict]]
+
 ### Requirement: Additive, bounded, deterministic envelope
 
 The brief envelope SHALL gain an optional `roadmap{}` (`identity`, `bets`,

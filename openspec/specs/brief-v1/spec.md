@@ -101,6 +101,7 @@ Curation-item lifecycle (one item of work in a repository):
 | freshness_thresholds_declared | unit | [[brief.v1.per_source_freshness]] | `fixture_repo_with_on_horizon_and_past_horizon_sources()` | `thresholds read beads 7 ∧ git 7 ∧ openspec 14 ∧ whisper 14 ∧ curation 14, once each ∧ on-horizon == fresh ∧ one-day-past == stale ∧ impaired mandatory source downgrades green to amber (basis human) naming the source` |
 | as_of_reproducible_render | unit | [[brief.v1.reads_side_effect_free]] | `brief_run_twice_as_of_2026_11_18()` | `payloads equal after removing generated_at ∧ BRIEF.json renders differ only in generated_at ∧ BRIEF.md freshness stamp differs only in generated_at value ∧ boundary verdicts do not flip between runs` |
 | drift_gate_detects_stale_render | unit | [[brief.v1.derived_never_authored]] | `brief_drift_gate_on_stale_render()` | `gate exits 0 on match ∧ exits non-zero naming the divergent artifact on drift ∧ never writes the working tree ∧ no committed renders is a no-op` |
+| health_no_go_line | unit | [[brief.v1.unknown_never_green]] | `fixture_repo_with_no_go_matching_open_bead()` | `Health section carries exactly one advisory no-go risk line naming subject + detail ∧ health.signals stays free of roadmap codes ∧ exit == 0 ∧ identical across two runs` |
 | corpus_self_lint | unit | [[brief.v1.enforcement_routed]] | `spk_lint_over_this_corpus()` | `check(openspec/specs) == passed` — the corpus must satisfy its own declared shape before any runtime tier is claimed |
 
 ## Requirements
@@ -446,3 +447,31 @@ opt-in in lefthook/CI.
 - **WHEN** `scripts/guards/brief-drift.sh` runs against a committed render, and again after the fixture repository gains a commit without re-rendering
 - **THEN** the first run exits 0, the second exits non-zero and names the divergent render, and `BRIEF.md` and `BRIEF.json` are byte-identical before and after both runs
 - **VERIFIES** [[brief.v1.drift_gate_detects_stale_render]]
+
+### Requirement: Health narrative surfaces the at-risk no-go
+
+When the brief carries a `roadmap` object whose `warnings` include a
+`no_go_violation_candidate` warning, the markdown Health section SHALL gain
+exactly one extra line, `- no-go risk: <subject> — <detail>`, naming the first
+candidate in the lens's deterministic warning order; no `SignalKind` SHALL be
+added and `health.signals` SHALL stay unchanged. When no candidate fires,
+including when no `roadmap` object is present, the Health section SHALL be
+byte-identical to the render without the rule.
+
+#### Scenario: health_no_go_line
+
+- **WHEN** `podras brief --as-of 2026-11-18` runs on a fixture repository whose roadmap file declares a no-go with a match term matching an open bead's title, and again on the same fixture without that matching bead
+- **THEN** the first run's Health section contains exactly one `- no-go risk:` line naming the no-go id as subject and the bead-and-term evidence as detail, placed after the signal lines, `health.signals` carries no roadmap code, and the second run's Health section contains no `no-go risk:` line and is byte-identical to a brief rendered with no roadmap file at all
+- **VERIFIES** [[brief.v1.health_no_go_line]]
+
+#### Scenario: health_no_go_line_determinism
+
+- **WHEN** `podras brief --write --as-of 2026-11-18` runs twice on the candidate fixture
+- **THEN** the two `BRIEF.md` renders are identical apart from the `generated_at` freshness stamp and both carry the single `- no-go risk:` line, and the envelope keeps `schema_version = "brief.v1"` with no new field
+- **VERIFIES** [[brief.v1.health_no_go_line]]
+
+#### Scenario: escalating_the_no_go_line_is_a_violation
+
+- **WHEN** no `no_go_violation_candidate` fires, or the advisory line exists
+- **THEN** a no-candidate render carries no `- no-go risk:` line at all, and the advisory line never becomes a `health.signals` member or changes the verdict — escalation is a layering violation
+- **VERIFIES** [[brief.v1.health_no_go_line]]
