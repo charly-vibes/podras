@@ -268,4 +268,36 @@
   Task: podras-eg4 in_flight bound — DONE, PUSHED (5b03fe4, origin/main up to date). User ratified option B (declared bound 15) on continue after orientation. IN_FLIGHT_BOUND=15 reuses the truncation contract (omitted_counts.in_flight + "(N more omitted)" narrative); zero schema change, brief.v1 unchanged. Tests: envelope in_flight_truncated, bounds_declared under-bound case, brief.rs lexicographic-prefix narrative. Fleet sweep BOUNDS carries in_flight: 15. Openspec MODIFIED requirement archived as 2026-11-19-add-in-flight-bound; bounded_defaults invariant + property rows synced; ah check/spk lint/drift gate green. podras' committed renders regenerated (podras brief --write --as-of 2026-11-18, installed 0.1.0).
   State: no open beads; podras health amber (orphan commits + 2 openspec changes without beads links — add-no-go-health-line, add-roadmap-lens-read-path still pending, roadmap-lens 30/34 tasks).
   Next action: user picks next thread — candidates: finish add-roadmap-lens-read-path (4 tasks left), ratify/land add-no-go-health-line, or new work.
-  Previous entry: 3422346e4b767865cc213fba8678dfd80fd2077a07e517c969bb59a5f2356f9a (supersedes 3422346e4b767865cc213fba8678dfd80fd2077a07e517c969bb59a5f2356f9a)
+  Previous entry: 3422346e4b767865cc213fba8678dfd80fd2077a07e517c969bb59a5f2356f9a (supersedes 3422346e4b767865cc213fba8678dfd80fd2077a07e517c969bb59a5f2356f9a) (superseded by 7f60d09c27b597727a6923aaa3f35ea53d9fa4c7efa082760de47f8959d41658)
+- 2026-11-19T17:56:28Z [id:7f60d09c27b597727a6923aaa3f35ea53d9fa4c7efa082760de47f8959d41658] (#resume-podras-brief) Format: 1
+  2026-11-19T17:56:05Z | repo: charly-vibes/podras | branch: main | HEAD: a57119b | session: podras-inflight-bound-2026-11-19
+  Task: podras eg4 follow-through + full housekeeping — DONE, PUSHED (a57119b, origin/main up to date, working tree clean).
+  Previous entry: f2e7e3d3ab4306e906d0a8c694bd1f4f1f7872df4a71ab2c513d7ace13d9bef2
+  ## State
+  - eg4 landed: in_flight bound 15, truncation contract reuse, no schema change (5b03fe4); ticket CLOSED with ratification note.
+  - Housekeeping done: ah lint 41 -> 0 (roadmap-v1 scenarios retargeted from invariant ids to unit property rows; 19 grounded negative scenarios across brief-v1/roadmap-v1; Non-Goals sections in both specs; 5 missing brief-v1 property rows added: harvest x2, freshness_thresholds_declared, as_of_reproducible_render, drift_gate_detects_stale_render).
+  - Both pending openspec changes archived: add-roadmap-lens-read-path and add-no-go-health-line (delta refreshed before archiving so the roadmap negative scenario survives; missing health-no-go-line.toml contract fixture deployed; tests existed). Zero pending changes.
+  - llm.txt removed (byte-identical twin of canonical llms.txt). .whisper/ now TRACKED by decision: turu default repo-local store syncs via git; --private remains the never-push zone. Fixture authored_with 0.12.3 regeneration deliberately skipped (ah doctor healthy).
+  - beads: zero open tickets. podras health: only the historical orphan_commits signal remains (audit-only, 35 old commits without tracker ids).
+  ## Validation (run this session, post-edit)
+  cargo test 24/24 suites; ah lint 0 findings; ah check clean; spk lint clean; openspec validate --specs --strict 2/2; brief drift gate green (podras renders regenerated with installed 0.1.0 == HEAD semantics).
+  ## Constraints / authorization
+  - Standing push authorization for podras only; other house repos untouched. One --force-with-lease push was used to replace my own just-pushed amended commit (56821a0 -> 4df81b6); no third-party history touched.
+  - House rules: TDD red->green; spec/narrative changes only via deliberate openspec change; admission decisions human.
+  ## Next action
+  User picks the next thread. Candidates: implement bet lifecycle verbs (roadmap stage 7), harvest identity_review/retire_or_reshape (stage 8), fixture authored_with regeneration, or new work. No blockers; all gates green at a57119b. (supersedes f2e7e3d3ab4306e906d0a8c694bd1f4f1f7872df4a71ab2c513d7ace13d9bef2)
+- 2026-11-19T18:43:29Z [id:bfe06b3ec7633ea713ebb17cc889ac653fcfc81c34058a3cc8a275b9c7b50204] Format: 1
+  2026-11-19T22:20:00Z | repo: charly-vibes/podras | branch: main | HEAD: 7655e7afb0 (feat commits; trailing chore/render commits follow in this push) | session: podras-bet-harvest-stages-2026-11-19
+  Task: roadmap stages ⑦+⑧ — DONE, PUSHED (bet lifecycle verbs + harvest roadmap candidates; origin/main up to date).
+  Previous entry: 7f60d09c27b597727a6923aaa3f35ea53d9fa4c7efa082760de47f8959d41658
+  ## State
+  - Stage ⑦ landed (cd309f9f0c): podras bet add|admit|defer|kill — admit stamps admitted_at (now optional until admission), defer from shaping/committed/building requires revive_when, kill from any status clears forbidden fields; decision dates via --as-of stamped in last_reviewed; canonical atomic save in roadmap/file.rs; malformed file blocks any write. bet start/ship stay human hand-edits (design D7, Non-Goals).
+  - Stage ⑧ landed (7655e7afb0): podras harvest emits identity_review (iff next_review strictly passed) and retire_or_reshape (circuit_breaker_due | bet_no_transition | bet_epic_closed_not_retired; non-terminal bets; no lens bound), evidence union git|notes|roadmap; malformed roadmap.toml degrades to zero candidates at exit 0; writes nothing, idempotent.
+  - Openspec changes add-bet-lifecycle-verbs and add-harvest-roadmap-candidates validated --strict; NOT yet archived — archive-time Constraints/Properties row sync + roadmap-v1 Non-Goals cleanup outstanding (same flow as the ⑥ archive).
+  - Tickets closed: podras-o89/e09 (⑦), podras-1jj/0k4 (⑧); beads jsonl export refreshed.
+  ## Validation (run this session, post-edit)
+  cargo test full suite green; ah lint 0 findings; ah check clean; spk lint ok; openspec validate --specs --strict 2/2 and --changes --strict 2/2; brief-drift green at regeneration (committed renders carry the render commit's HEAD).
+  ## Constraints / authorization
+  - Standing push authorization for podras only, exercised this session. House rules held: TDD red→green; spec changes via deliberate openspec change; admission/deferral/kill are human verbs; agents never edit .podras/roadmap.toml.
+  ## Next action
+  User picks the next thread. Candidates: archive the two pending openspec changes (delta row sync + Non-Goals cleanup), fixture authored_with regeneration, or new work. No blockers.
