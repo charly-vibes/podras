@@ -418,3 +418,9 @@
   User picks next thread: CORR-003 as deliberate change (admit epic-id soft-check), fixture authored_with regeneration, exercise ah check --run-tests, or new work.
   ## References
   openspec/changes/archive/2026-11-19-update-stale-stage-framing/; ticket podras-6gq (closed); handoff chain dcce15a4 -> 5224a759 -> f31ca4ae -> this entry. (supersedes f31ca4aed907318b53aeb121696b630c1a167e21b16ac00aa58d13e2f1390116)
+
+## 2026-11-27T20:05Z | podras-yfx landed
+Landed genesis module adoption (doctor, config, feedback, guide, status) through 34438a2, pushed to origin, podras-yfx closed+exported. Gates: cargo fmt, clippy -D warnings, 208 tests green, ah check clean; brief/roadmap byte-identical vs HEAD baseline.
+Orchestrator fixes after subagent delivery (LuckyGazelle): ConfigFile::path must return repo_root.join(marker) (src/config.rs); dry-run test expectation corrected to genesis 0.13.2's FallbackUrl contract (tests/feedback.rs); status JSON payload wraps genesis's computed summary via podras StatusReport (src/status.rs).
+## Next action
+Next: pick a thread — podras-ite (bd export double-encodes metadata.files as JSON string; breaks podras beads reader, brief reports '5 malformed lines') or the podras-x5x kaya chain (x5x.1 bootstrap first). No in_progress claims.
