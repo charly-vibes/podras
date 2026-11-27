@@ -10,19 +10,14 @@ none
 
 ## In flight
 
-- podras-x5x — Adopt kaya: research record as the single source of truth (status: open; priority: 1; age: 0d)
-- podras-x5x.6 — kaya publication: generated dossier in docs + link check (status: open; priority: 1; age: 0d)
-- podras-x5x.7 — kaya SSOT cutover: versions.ddl.toml pin + duplicate-doc retirement (status: open; priority: 1; age: 0d; blocked by: podras-x5x.6)
 - podras-yfx — genesis: adopt missing modules — doctor, config, feedback, guide, status (status: open; priority: 2; age: 0d)
 
 ## Blocked / waiting
 
-- podras-x5x.7 — kaya SSOT cutover: versions.ddl.toml pin + duplicate-doc retirement (status: open; priority: 1; age: 0d; blocked by: podras-x5x.6)
+none
 
 ## Next / ready
 
-- podras-x5x — Adopt kaya: research record as the single source of truth (status: open; priority: 1; age: 0d)
-- podras-x5x.6 — kaya publication: generated dossier in docs + link check (status: open; priority: 1; age: 0d)
 - podras-yfx — genesis: adopt missing modules — doctor, config, feedback, guide, status (status: open; priority: 2; age: 0d)
 
 ## Parked
@@ -35,12 +30,12 @@ none
 
 ## Recent
 
+- 9e35181d413c88653aa7cd2ebac3dca9ecd9b0ba chore(docs): gitignore generated spec stubs (docs.yml build artifacts) (2026-11-27T18:52:34Z)
+- bb91ba0837de96819e9688b106a29a4dbb67e0cb kaya: SSOT cutover — pin kaya@0.4.1, README record section (podras-x5x.7) (2026-11-27T18:52:00Z)
+- a91d72e7a03ca716faf4b593d77ef6920f88f813 kaya: publication dossier in docs build + link check (podras-x5x.6) (2026-11-27T18:51:04Z)
+- 2ffcbd522b37aab415d06e99b6c0630415641fb6 chore: refresh beads export + brief renders (close podras-ite, podras-x5x.5) (2026-11-27T17:52:42Z)
 - 5b5f76e92b182eae42ca1a1ff8eab6ae5c4096c1 kaya: record gates — hooks, CI parity, record-lag (podras-x5x.5) (2026-11-27T17:51:46Z)
-- 74d0856690b69bd044492f2729e7a4e17d59b2f5 fix(beads): tolerate stringified metadata.files in reader (podras-ite) (2026-11-27T17:51:41Z)
-- 007e8f8de3722c84303a0a5481119ad525a45c2f chore: refresh beads export (close podras-x5x.1, claim podras-ite) (2026-11-27T17:40:03Z)
-- 6bc0b85a8abb0577ff0098a5cdd0db7027d1819b chore: regenerate committed brief renders at HEAD (2026-11-27T17:38:27Z)
-- f7ffcc9beee2ac331a9d826aa650ace1f2772b43 kaya: publish record tree + add publish to capture loop (2026-11-27T17:37:57Z)
-(56 more omitted)
+(60 more omitted)
 
 ## Health + confidence
 
@@ -51,12 +46,12 @@ Health: **amber** — basis: signals — owner: none — reason: orphan_commits:
 
 | source | status | observed_at | staleness | detail |
 | --- | --- | --- | --- | --- |
-| beads | present | 2026-11-27T17:52:39Z | fresh | none |
-| git | present | 2026-11-27T17:51:46Z | fresh | none |
+| beads | present | 2026-11-27T18:52:36Z | fresh | none |
+| git | present | 2026-11-27T18:52:34Z | fresh | none |
 | openspec | present | 2026-11-19T20:03:11Z | fresh | none |
 | whisper | present | 2026-11-19T20:21:45Z | fresh | none |
 | curation | present | 2026-11-18T21:12:09Z | fresh | none |
 
 Curation: updated_at 2026-11-18T21:12:09Z; confirmed_at none.
 
-Freshness: generated_at 2026-11-27T17:52:39Z; per-source observed_at and staleness are listed above.
+Freshness: generated_at 2026-11-27T18:52:36Z; per-source observed_at and staleness are listed above.

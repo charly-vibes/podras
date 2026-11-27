@@ -6,19 +6,19 @@
   "data": {
     "schema_version": "brief.v1",
     "as_of": "2026-11-18",
-    "generated_at": "2026-11-27T17:52:39.895762299Z",
+    "generated_at": "2026-11-27T18:52:36.135399716Z",
     "sources": [
       {
         "name": "beads",
         "status": "present",
-        "observed_at": "2026-11-27T17:52:39Z",
+        "observed_at": "2026-11-27T18:52:36Z",
         "staleness": "fresh",
         "detail": null
       },
       {
         "name": "git",
         "status": "present",
-        "observed_at": "2026-11-27T17:51:46Z",
+        "observed_at": "2026-11-27T18:52:34Z",
         "staleness": "fresh",
         "detail": null
       },
@@ -52,38 +52,6 @@
     "focus": [],
     "in_flight": [
       {
-        "id": "podras-x5x",
-        "title": "Adopt kaya: research record as the single source of truth",
-        "status": "open",
-        "priority": 1,
-        "blocked_by": [],
-        "age_days": 0,
-        "reason": null,
-        "confirmed_at": null
-      },
-      {
-        "id": "podras-x5x.6",
-        "title": "kaya publication: generated dossier in docs + link check",
-        "status": "open",
-        "priority": 1,
-        "blocked_by": [],
-        "age_days": 0,
-        "reason": null,
-        "confirmed_at": null
-      },
-      {
-        "id": "podras-x5x.7",
-        "title": "kaya SSOT cutover: versions.ddl.toml pin + duplicate-doc retirement",
-        "status": "open",
-        "priority": 1,
-        "blocked_by": [
-          "podras-x5x.6"
-        ],
-        "age_days": 0,
-        "reason": null,
-        "confirmed_at": null
-      },
-      {
         "id": "podras-yfx",
         "title": "genesis: adopt missing modules — doctor, config, feedback, guide, status",
         "status": "open",
@@ -94,41 +62,8 @@
         "confirmed_at": null
       }
     ],
-    "blocked": [
-      {
-        "id": "podras-x5x.7",
-        "title": "kaya SSOT cutover: versions.ddl.toml pin + duplicate-doc retirement",
-        "status": "open",
-        "priority": 1,
-        "blocked_by": [
-          "podras-x5x.6"
-        ],
-        "age_days": 0,
-        "reason": null,
-        "confirmed_at": null
-      }
-    ],
+    "blocked": [],
     "next": [
-      {
-        "id": "podras-x5x",
-        "title": "Adopt kaya: research record as the single source of truth",
-        "status": "open",
-        "priority": 1,
-        "blocked_by": [],
-        "age_days": 0,
-        "reason": null,
-        "confirmed_at": null
-      },
-      {
-        "id": "podras-x5x.6",
-        "title": "kaya publication: generated dossier in docs + link check",
-        "status": "open",
-        "priority": 1,
-        "blocked_by": [],
-        "age_days": 0,
-        "reason": null,
-        "confirmed_at": null
-      },
       {
         "id": "podras-yfx",
         "title": "genesis: adopt missing modules — doctor, config, feedback, guide, status",
@@ -144,33 +79,33 @@
     "needs_retriage": [],
     "recent": [
       {
+        "sha": "9e35181d413c88653aa7cd2ebac3dca9ecd9b0ba",
+        "committed_at": "2026-11-27T18:52:34Z",
+        "subject": "chore(docs): gitignore generated spec stubs (docs.yml build artifacts)",
+        "outcome": null
+      },
+      {
+        "sha": "bb91ba0837de96819e9688b106a29a4dbb67e0cb",
+        "committed_at": "2026-11-27T18:52:00Z",
+        "subject": "kaya: SSOT cutover — pin kaya@0.4.1, README record section (podras-x5x.7)",
+        "outcome": null
+      },
+      {
+        "sha": "a91d72e7a03ca716faf4b593d77ef6920f88f813",
+        "committed_at": "2026-11-27T18:51:04Z",
+        "subject": "kaya: publication dossier in docs build + link check (podras-x5x.6)",
+        "outcome": null
+      },
+      {
+        "sha": "2ffcbd522b37aab415d06e99b6c0630415641fb6",
+        "committed_at": "2026-11-27T17:52:42Z",
+        "subject": "chore: refresh beads export + brief renders (close podras-ite, podras-x5x.5)",
+        "outcome": null
+      },
+      {
         "sha": "5b5f76e92b182eae42ca1a1ff8eab6ae5c4096c1",
         "committed_at": "2026-11-27T17:51:46Z",
         "subject": "kaya: record gates — hooks, CI parity, record-lag (podras-x5x.5)",
-        "outcome": null
-      },
-      {
-        "sha": "74d0856690b69bd044492f2729e7a4e17d59b2f5",
-        "committed_at": "2026-11-27T17:51:41Z",
-        "subject": "fix(beads): tolerate stringified metadata.files in reader (podras-ite)",
-        "outcome": null
-      },
-      {
-        "sha": "007e8f8de3722c84303a0a5481119ad525a45c2f",
-        "committed_at": "2026-11-27T17:40:03Z",
-        "subject": "chore: refresh beads export (close podras-x5x.1, claim podras-ite)",
-        "outcome": null
-      },
-      {
-        "sha": "6bc0b85a8abb0577ff0098a5cdd0db7027d1819b",
-        "committed_at": "2026-11-27T17:38:27Z",
-        "subject": "chore: regenerate committed brief renders at HEAD",
-        "outcome": null
-      },
-      {
-        "sha": "f7ffcc9beee2ac331a9d826aa650ace1f2772b43",
-        "committed_at": "2026-11-27T17:37:57Z",
-        "subject": "kaya: publish record tree + add publish to capture loop",
         "outcome": null
       }
     ],
@@ -189,11 +124,11 @@
     "truncation": {
       "applied": true,
       "omitted_counts": {
-        "recent": 56
+        "recent": 60
       }
     },
-    "head_sha": "5b5f76e92b182eae42ca1a1ff8eab6ae5c4096c1",
-    "source_hash": "2cd341ebb4a658c3b40da707f18713b201f755a2c82162aad04596af87c8b120",
+    "head_sha": "9e35181d413c88653aa7cd2ebac3dca9ecd9b0ba",
+    "source_hash": "ce0710c80ceeb0a8a8fd0dfab342db462402280ea59d8dff2d15930f2ed3295b",
     "warnings": []
   },
   "warnings": [],
