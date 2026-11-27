@@ -4,8 +4,8 @@
 Purpose: detect a record that has stopped tracking the repository, without
 re-importing anything and without a second ledger parser.
 Responsibilities: read the facts from one `kaya check` envelope, count commits
-since `last_capture_commit` that touched record-relevant paths, and compare the
-count to a repository-owned bound.
+since `last_capture_commit` that the git adapter imports, and compare the count
+to a repository-owned bound.
 Rationale: `kaya` reports facts and evaluates no thresholds; the bound and the
 mode (warn on pull requests, fail on main and releases) belong to the caller.
 """
@@ -17,19 +17,25 @@ import json
 import subprocess
 import sys
 
-# Paths whose commits make the record stale. Keep this list aligned with the
-# capture adapters: source, compiled docs, specification, and wai artifacts.
-PATHS = ["src", "docs", "openspec", ".wai"]
+# The git adapter records every commit except the ones carrying the
+# self-identifying capture prefix (`--exclude-message-prefix`, mirroring the
+# justfile's `record-capture` import). The lag count must therefore be
+# path-independent: workflows, scripts, and tracker exports all become ledger
+# events, so restricting the count to source paths undercounts real lag.
+SELF_CAPTURE_PREFIX = "^chore(record):"
 
 
 def check_facts() -> tuple[dict, str | None]:
     """Run one check and return its data plus the capture frontier."""
-    process = subprocess.run(
-        ["kaya", "check"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        process = subprocess.run(
+            ["kaya", "check"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        return {}, f"kaya cannot be run: {exc}"
     try:
         envelope = json.loads(process.stdout)
     except json.JSONDecodeError:
@@ -45,13 +51,24 @@ def check_facts() -> tuple[dict, str | None]:
 
 
 def commits_since(frontier: str) -> int | str:
-    """Commits touching record paths since `frontier`, or an error message."""
-    process = subprocess.run(
-        ["git", "rev-list", "--count", f"{frontier}..HEAD", "--", *PATHS],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    """Commits the git adapter imports since `frontier`, or an error message."""
+    try:
+        process = subprocess.run(
+            [
+                "git",
+                "rev-list",
+                "--count",
+                "--grep",
+                SELF_CAPTURE_PREFIX,
+                "--invert-grep",
+                f"{frontier}..HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        return f"git cannot be run: {exc}"
     if process.returncode != 0:
         return f"git cannot walk from {frontier}: {process.stderr.strip()}"
     try:

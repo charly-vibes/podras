@@ -54,8 +54,8 @@ record-lag mode="warn" bound="60":
     python3 scripts/record-lag.py --mode {{mode}} --bound {{bound}}
 
 # Full record gate: verify, then lag (mode warn|fail).
-record-check mode="warn": record-verify
-    python3 scripts/record-lag.py --mode {{mode}} --bound 60
+record-check mode="warn" bound="60": record-verify
+    python3 scripts/record-lag.py --mode {{mode}} --bound {{bound}}
 
 # Full local gate, in the same order CI runs it.
 ci: fmt lint test

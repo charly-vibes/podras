@@ -13,6 +13,10 @@ on:
       - 'book.toml'
       - 'theme/**'
       - 'Cargo.toml'
+      # The publication tree is rendered by these scripts; a fix there must
+      # redeploy the site instead of waiting for the next docs/** change.
+      - 'scripts/build-publications.py'
+      - 'scripts/check-links.py'
   workflow_dispatch:
 
 permissions:

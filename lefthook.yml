@@ -14,11 +14,14 @@ pre-commit:
       run: spk lint openspec/specs || test $? -eq 2
     # ddl:managed:end (pre-commit)
 
-    # Record gate: fail the commit when staged-authored entries are stale in the
-    # committed ledger. Kept outside the ddl:managed blocks so `ddl init --gates`
-    # never owns it (same placement rationale as the brief-drift gate below).
+    # Record gate: fail the commit when the ledger is stale against the staged
+    # tree, including authored entries (`--fail-on-stale-authored` once authored
+    # blocks exist; the repo has none yet). Degrades to a warning when the
+    # pinned kaya is absent locally — CI (mode=fail on main) is the enforcing
+    # gate. Kept outside the ddl:managed blocks so `ddl init --gates` never owns
+    # it (same placement rationale as the brief-drift gate below).
     record-verify-staged:
-      run: kaya check --index --fail-on-stale-authored
+      run: "sh -c 'command -v kaya >/dev/null 2>&1 || { echo \"record-verify-staged: SKIP - kaya not installed (pinned in versions.ddl.toml)\" >&2; exit 0; }; kaya check --index --fail-on-stale-authored'"
 
     # Opt-in committed-render drift gate. Uncomment after committing BRIEF.md and
     # BRIEF.json (regenerate with `podras brief --write`): the hook compares both
@@ -40,6 +43,7 @@ pre-push:
     # ddl:managed:end (pre-push)
 
     # Record gate: verify the record against its projections before pushing.
+    # Same absence guard as the pre-commit entry; CI fails on main regardless.
     # Outside the ddl:managed blocks so `ddl init --gates` never owns it.
     record-verify:
-      run: just record-verify
+      run: "sh -c 'command -v kaya >/dev/null 2>&1 || { echo \"record-verify: SKIP - kaya not installed (pinned in versions.ddl.toml)\" >&2; exit 0; }; just record-verify'"

@@ -130,8 +130,9 @@ cargo install --path .  # run your local build
 The repo's research record is a kaya ledger (`.kaya/ledger.jsonl`). Its
 projections — `docs/research/` and `docs/public/` — are generated build
 outputs: **do not hand-edit them**. Capture new evidence with
-`just record-capture` (skips on a dirty tree) and gate with `just record-check`.
-The nightly Record workflow (`.github/workflows/record.yml`) captures scheduled
+`just record-capture` (skips on a dirty tree) and gate with `just record-check`
+(locally the lag gate defaults to warn; CI fails on main). The nightly Record
+workflow (`.github/workflows/record.yml`) captures scheduled
 snapshots, and docs Pages deploys the dossier alongside the mdBook.
 
 ## Naming

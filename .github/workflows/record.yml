@@ -59,6 +59,14 @@ jobs:
       - name: Capture and compile
         run: just record-capture
 
+      # Rebase-conflict recovery (a capture commit collides with concurrently
+      # landed ledger/projection edits — kaya's pattern hit this twice):
+      #   1. `git rebase --abort` locally, or rerun the failed step with
+      #      `git pull --rebase origin main` from a clean checkout.
+      #   2. Regenerate from the remote state instead of hand-merging:
+      #      `git checkout origin/main -- .kaya docs/research docs/public`
+      #      then `just record-capture` and commit the fresh snapshot.
+      #   3. Push. Never hand-edit the generated projections.
       - name: Commit the snapshot
         run: |
           git add -A
