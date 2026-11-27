@@ -25,7 +25,7 @@ fn plain_version_prints_name_and_version() {
         .clone();
     let stdout = String::from_utf8(stdout).expect("version output is UTF-8");
     assert!(
-        stdout.contains("podras 0.1.0"),
+        stdout.contains(concat!("podras ", env!("CARGO_PKG_VERSION"))),
         "version output is missing the name and version: {stdout}"
     );
 }
@@ -42,7 +42,7 @@ fn version_json_emits_genesis_envelope() {
     let stdout = String::from_utf8(output).expect("version envelope is UTF-8");
     let value: serde_json::Value =
         serde_json::from_str(stdout.trim()).expect("version envelope is JSON");
-    assert_eq!(value["cli_version"], "0.1.0");
+    assert_eq!(value["cli_version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(value["envelope_kind"], "version");
 }
 
