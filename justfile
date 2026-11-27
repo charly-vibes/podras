@@ -25,10 +25,10 @@ brief-drift *args:
     scripts/guards/brief-drift.sh {{args}}
 
 # Capture research observations into the kaya ledger: wai artifacts + git
-# history, then rebuild the projections. Skips on a dirty tree and serializes
-# concurrent runs under .kaya/capture.lock (pattern: charly-vibes/kaya
-# justfile:record-capture @ v0.4.1). Publication (`kaya publish`) lands with
-# the kaya SSOT cutover, podras-x5x.7.
+# history, then rebuild and publish the projections. Skips on a dirty tree and
+# serializes concurrent runs under .kaya/capture.lock (pattern:
+# charly-vibes/kaya justfile:record-capture @ v0.4.1; `kaya check` verifies the
+# published tree too, so publish is part of the capture loop).
 record-capture:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -42,6 +42,7 @@ record-capture:
     kaya import wai --project podras
     kaya import git --project podras --exclude-message-prefix "chore(record):"
     kaya build
+    kaya publish
 
 # Full local gate, in the same order CI runs it.
 ci: fmt lint test
