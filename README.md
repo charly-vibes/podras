@@ -125,6 +125,15 @@ just test  # tests only
 cargo install --path .  # run your local build
 ```
 
+## Research record
+
+The repo's research record is a kaya ledger (`.kaya/ledger.jsonl`). Its
+projections — `docs/research/` and `docs/public/` — are generated build
+outputs: **do not hand-edit them**. Capture new evidence with
+`just record-capture` (skips on a dirty tree) and gate with `just record-check`.
+The nightly Record workflow (`.github/workflows/record.yml`) captures scheduled
+snapshots, and docs Pages deploys the dossier alongside the mdBook.
+
 ## Naming
 
 Named with a nod to *No podrás* (Cristian Castro) — "tal vez te olvides de mí…" — forgetting is fine; coming back cold should still tell you what's happening. Deterministic, per-repo, a lens you point at a project. (Resembles *podrá* — "it will be able to"; the tool tells you what the project can do next.)

@@ -19,3 +19,4 @@ openspec = "0.19.0"        # npm: @fission-ai/openspec (held: 2.0.0 stops writin
 bd = "1.3.4"               # beads — pinned GitHub release download (no versioned homebrew-core formula)
 bajan = "0.1.0"            # crates.io — spec-driven knowledge-graph pipeline (bajan-23s)
 specodelic = "0.14.0"      # crates.io (bin: spk) — spec corpus lint: `spk lint openspec/specs`
+kaya = "0.4.1"             # crates.io — research-record compiler (.kaya ledger): just record-capture / record-check; ci.yml + record.yml install it pinned
