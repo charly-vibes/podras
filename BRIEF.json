@@ -6,33 +6,33 @@
   "data": {
     "schema_version": "brief.v1",
     "as_of": "2026-11-18",
-    "generated_at": "2026-11-19T19:27:23.673122071Z",
+    "generated_at": "2026-11-27T17:38:23.259093551Z",
     "sources": [
       {
         "name": "beads",
         "status": "present",
-        "observed_at": "2026-11-19T18:42:25Z",
+        "observed_at": "2026-11-19T20:03:42Z",
         "staleness": "fresh",
-        "detail": null
+        "detail": "5 malformed line(s) skipped in .beads/issues.jsonl"
       },
       {
         "name": "git",
         "status": "present",
-        "observed_at": "2026-11-19T18:59:47Z",
+        "observed_at": "2026-11-27T17:37:57Z",
         "staleness": "fresh",
         "detail": null
       },
       {
         "name": "openspec",
         "status": "present",
-        "observed_at": "2026-11-19T19:26:57.987699400Z",
+        "observed_at": "2026-11-19T20:03:11.527907476Z",
         "staleness": "fresh",
         "detail": null
       },
       {
         "name": "whisper",
         "status": "present",
-        "observed_at": "2026-11-19T19:06:31Z",
+        "observed_at": "2026-11-19T20:21:45Z",
         "staleness": "fresh",
         "detail": null
       },
@@ -57,33 +57,33 @@
     "needs_retriage": [],
     "recent": [
       {
-        "sha": "262c8574760d9d5574f0f9030c0c334c67139636",
-        "committed_at": "2026-11-19T18:59:47Z",
-        "subject": "fix(harvest): rule-of-5 review fixes — unadmitted bets keep epic triggers",
+        "sha": "f7ffcc9beee2ac331a9d826aa650ace1f2772b43",
+        "committed_at": "2026-11-27T17:37:57Z",
+        "subject": "kaya: publish record tree + add publish to capture loop",
         "outcome": null
       },
       {
-        "sha": "01c4e80c426778b5ac59bf67f17826d6d0d72b38",
-        "committed_at": "2026-11-19T18:43:55Z",
-        "subject": "chore: regenerate committed renders at HEAD",
+        "sha": "388859939b27ea22939722c2f9f7021438a70ffb",
+        "committed_at": "2026-11-27T17:36:54Z",
+        "subject": "chore(record): capture bootstrap commits",
         "outcome": null
       },
       {
-        "sha": "f8d6dfff342fab6e40db623aa313e9d590b6a090",
-        "committed_at": "2026-11-19T18:43:41Z",
-        "subject": "chore: close stage ⑦/⑧ tickets; session handoff; refresh beads export",
+        "sha": "cf6f49a748bea451c0bb9a6aa5d156b2be4d2972",
+        "committed_at": "2026-11-27T17:36:41Z",
+        "subject": "kaya: bootstrap research record (podras-x5x.1)",
         "outcome": null
       },
       {
-        "sha": "7655e7afb0b22b39e34b1514fb670dced3567a8b",
-        "committed_at": "2026-11-19T18:42:24Z",
-        "subject": "feat(harvest): stage ⑧ roadmap candidates (identity_review, retire_or_reshape)",
+        "sha": "b48cfba8911edaf7201367d51e6d5b008c11b789",
+        "committed_at": "2026-11-27T17:36:36Z",
+        "subject": "chore: whisper handoff re-append (podras-6gq session close)",
         "outcome": null
       },
       {
-        "sha": "cd309f9f0c074518ddf5b0438495c98c06467d82",
-        "committed_at": "2026-11-19T18:41:53Z",
-        "subject": "feat(roadmap): stage ⑦ bet lifecycle verbs (bet add|admit|defer|kill)",
+        "sha": "da61774fa5854c54549d3a8ae6cffaa616e2c97c",
+        "committed_at": "2026-11-25T17:16:00Z",
+        "subject": "beads: file kaya-adoption epic + 4-child chain (podras-x5x)",
         "outcome": null
       }
     ],
@@ -102,12 +102,18 @@
     "truncation": {
       "applied": true,
       "omitted_counts": {
-        "recent": 43
+        "recent": 52
       }
     },
-    "head_sha": "262c8574760d9d5574f0f9030c0c334c67139636",
-    "source_hash": "63386e852a045e5df69d39ef31c85000ce266dbf2e9869f9ce4544b3e2a66f4f",
-    "warnings": []
+    "head_sha": "f7ffcc9beee2ac331a9d826aa650ace1f2772b43",
+    "source_hash": "457c2ae03f71080a4bf34562bae24ff9fccbba955d6ff6c3ccfa34d43b98b308",
+    "warnings": [
+      {
+        "source": "beads",
+        "code": "beads_parse_error",
+        "detail": "5 malformed line(s) skipped in .beads/issues.jsonl"
+      }
+    ]
   },
   "warnings": [],
   "hints": [],

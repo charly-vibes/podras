@@ -30,12 +30,12 @@ none
 
 ## Recent
 
-- 262c8574760d9d5574f0f9030c0c334c67139636 fix(harvest): rule-of-5 review fixes — unadmitted bets keep epic triggers (2026-11-19T18:59:47Z)
-- 01c4e80c426778b5ac59bf67f17826d6d0d72b38 chore: regenerate committed renders at HEAD (2026-11-19T18:43:55Z)
-- f8d6dfff342fab6e40db623aa313e9d590b6a090 chore: close stage ⑦/⑧ tickets; session handoff; refresh beads export (2026-11-19T18:43:41Z)
-- 7655e7afb0b22b39e34b1514fb670dced3567a8b feat(harvest): stage ⑧ roadmap candidates (identity_review, retire_or_reshape) (2026-11-19T18:42:24Z)
-- cd309f9f0c074518ddf5b0438495c98c06467d82 feat(roadmap): stage ⑦ bet lifecycle verbs (bet add|admit|defer|kill) (2026-11-19T18:41:53Z)
-(43 more omitted)
+- f7ffcc9beee2ac331a9d826aa650ace1f2772b43 kaya: publish record tree + add publish to capture loop (2026-11-27T17:37:57Z)
+- 388859939b27ea22939722c2f9f7021438a70ffb chore(record): capture bootstrap commits (2026-11-27T17:36:54Z)
+- cf6f49a748bea451c0bb9a6aa5d156b2be4d2972 kaya: bootstrap research record (podras-x5x.1) (2026-11-27T17:36:41Z)
+- b48cfba8911edaf7201367d51e6d5b008c11b789 chore: whisper handoff re-append (podras-6gq session close) (2026-11-27T17:36:36Z)
+- da61774fa5854c54549d3a8ae6cffaa616e2c97c beads: file kaya-adoption epic + 4-child chain (podras-x5x) (2026-11-25T17:16:00Z)
+(52 more omitted)
 
 ## Health + confidence
 
@@ -46,12 +46,12 @@ Health: **amber** — basis: signals — owner: none — reason: orphan_commits:
 
 | source | status | observed_at | staleness | detail |
 | --- | --- | --- | --- | --- |
-| beads | present | 2026-11-19T18:42:25Z | fresh | none |
-| git | present | 2026-11-19T18:59:47Z | fresh | none |
-| openspec | present | 2026-11-19T19:26:57Z | fresh | none |
-| whisper | present | 2026-11-19T19:06:31Z | fresh | none |
+| beads | present | 2026-11-19T20:03:42Z | fresh | 5 malformed line(s) skipped in .beads/issues.jsonl |
+| git | present | 2026-11-27T17:37:57Z | fresh | none |
+| openspec | present | 2026-11-19T20:03:11Z | fresh | none |
+| whisper | present | 2026-11-19T20:21:45Z | fresh | none |
 | curation | present | 2026-11-18T21:12:09Z | fresh | none |
 
 Curation: updated_at 2026-11-18T21:12:09Z; confirmed_at none.
 
-Freshness: generated_at 2026-11-19T19:27:23Z; per-source observed_at and staleness are listed above.
+Freshness: generated_at 2026-11-27T17:38:23Z; per-source observed_at and staleness are listed above.
