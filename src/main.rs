@@ -23,6 +23,14 @@ use miette::Report;
 struct Cli {
     #[command(subcommand)]
     command: Command,
+    /// Verbosity plumbing from genesis (`-v`/`-vv`/`-vvv`, `-q`); honored by
+    /// the doctor, config, feedback, and status subcommands.
+    #[command(flatten)]
+    verbose: genesis::guide::CliVerbosity,
+    /// Output-format plumbing from genesis (`--json`/`--human`); on non-TTY
+    /// output the new subcommands emit JSON envelopes by default.
+    #[command(flatten)]
+    format: genesis::guide::CliFormat,
 }
 
 #[derive(Debug, Subcommand)]
@@ -46,6 +54,39 @@ enum Command {
     Init,
     /// Emit the brief JSON Schema.
     Schema,
+    /// Check podras's adopted surfaces and report their health.
+    Doctor(DoctorArgs),
+    /// Discover and validate podras's human-owned config files (read-only).
+    Config,
+    /// Report an issue against podras's repository.
+    Feedback(FeedbackCliArgs),
+    /// Aggregate podras's health surfaces into one report.
+    Status,
+}
+
+/// Arguments of `podras doctor`.
+#[derive(Debug, Args)]
+struct DoctorArgs {
+    /// Apply available auto-fixes (doctor currently offers none).
+    #[arg(long)]
+    fix: bool,
+}
+
+/// Arguments of `podras feedback`.
+#[derive(Debug, Args)]
+struct FeedbackCliArgs {
+    /// Kind of feedback: bug, feature, question, or chore.
+    #[arg(default_value = "bug")]
+    kind: String,
+    /// User-supplied issue title overriding the derived one.
+    #[arg(long)]
+    title: Option<String>,
+    /// Print the issue body and gh command without submitting.
+    #[arg(long)]
+    dry_run: bool,
+    /// Read the last error from scratch to auto-populate the body.
+    #[arg(long)]
+    from_last_error: bool,
 }
 
 #[derive(Debug, Args)]
@@ -203,7 +244,14 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> miette::Result<()> {
-    match cli.command {
+    let Cli {
+        command,
+        verbose,
+        format,
+    } = cli;
+    let format = format.format();
+    let verbosity = verbose.verbosity();
+    match command {
         Command::Brief(args) => {
             let repo = repository()?;
             podras::commands::brief(
@@ -248,6 +296,31 @@ fn run(cli: Cli) -> miette::Result<()> {
             podras::commands::init(&repo).map_err(into_report)
         }
         Command::Schema => podras::commands::schema().map_err(into_report),
+        Command::Doctor(args) => {
+            let repo = repository()?;
+            podras::commands::doctor(&repo, args.fix, format, verbosity).map_err(into_report)
+        }
+        Command::Config => {
+            let repo = repository()?;
+            podras::commands::config(&repo, format, verbosity).map_err(into_report)
+        }
+        Command::Feedback(args) => {
+            let repo = repository()?;
+            podras::commands::feedback(
+                &repo,
+                &args.kind,
+                args.title.as_deref(),
+                args.dry_run,
+                args.from_last_error,
+                format,
+                verbosity,
+            )
+            .map_err(into_report)
+        }
+        Command::Status => {
+            let repo = repository()?;
+            podras::commands::status(&repo, format, verbosity).map_err(into_report)
+        }
     }
 }
 

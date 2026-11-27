@@ -9,8 +9,11 @@
 
 pub mod brief;
 pub mod commands;
+pub mod config;
 pub mod curation;
+pub mod doctor;
 pub mod error;
+pub mod feedback;
 pub mod freshness;
 pub mod harvest;
 pub mod hash;
@@ -19,6 +22,7 @@ pub mod model;
 pub mod readers;
 pub mod render;
 pub mod roadmap;
+pub mod status;
 pub mod verbs;
 pub mod write;
 

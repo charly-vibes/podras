@@ -14,6 +14,7 @@ use std::path::Path;
 use std::process::Command;
 
 use chrono::NaiveDate;
+use genesis::guide::{OutputFormat, Verbosity};
 
 use crate::error::{Error, Result};
 use crate::model::Brief;
@@ -296,4 +297,167 @@ pub fn init(repo: &Path) -> Result<()> {
 pub fn schema() -> Result<()> {
     print!("{}", crate::render::envelope::schema()?);
     Ok(())
+}
+
+/// Print a genesis envelope as pretty JSON, trimming the trailing newline.
+fn print_genesis_envelope<T: serde::Serialize>(
+    envelope: genesis::envelope::Envelope<T>,
+) -> Result<()> {
+    println!("{}", serde_json::to_string_pretty(&envelope)?.trim_end());
+    Ok(())
+}
+
+/// The verbosity level above which normal human output is shown.
+const NORMAL_VERBOSITY: u8 = genesis::guide::Verbosity::Normal as u8;
+
+/// Run `podras doctor`: check podras's adopted surfaces and print the report.
+///
+/// The doctor is read-only: no check offers an auto-fix, so `--fix` can
+/// never mutate state. A degraded surface is data, not a failure — the
+/// command exits 0 whenever the checks could run, exactly like `brief`.
+/// Output is a `doctor` JSON envelope on non-TTY (or `--json`) and
+/// `[status]` check lines with `--human`.
+pub fn doctor(repo: &Path, fix: bool, format: OutputFormat, verbosity: Verbosity) -> Result<()> {
+    let report = crate::doctor::run(repo, fix)?;
+    match format {
+        OutputFormat::Json => print_genesis_envelope(report.to_envelope(env!("CARGO_PKG_VERSION"))),
+        OutputFormat::Human => {
+            if verbosity.should_show(NORMAL_VERBOSITY) {
+                println!(
+                    "podras doctor: {} pass, {} warn, {} fail",
+                    report.summary.pass, report.summary.warn, report.summary.fail
+                );
+                for check in &report.checks {
+                    let status = if check.status.is_pass() {
+                        "pass"
+                    } else if check.status.is_fail() {
+                        "fail"
+                    } else {
+                        "warn"
+                    };
+                    println!("  [{status}] {}: {}", check.name, check.message);
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Run `podras config`: discover and validate podras's human-owned config
+/// files (read-only).
+///
+/// The config adoption is read and validate side only; missing files are
+/// reported as absent, never created. Output is a JSON envelope on non-TTY
+/// (or `--json`) and one line per config file or validation with `--human`.
+pub fn config(repo: &Path, format: OutputFormat, verbosity: Verbosity) -> Result<()> {
+    let report = crate::config::inspect(repo)?;
+    match format {
+        OutputFormat::Json => {
+            let warnings = report
+                .validations
+                .iter()
+                .filter(|validation| validation.severity == "error")
+                .map(|validation| genesis::envelope::Warning {
+                    rule_name: validation.field.clone(),
+                    entity_id: None,
+                    message: validation.message.clone(),
+                    suggested_remediation: None,
+                })
+                .collect();
+            print_genesis_envelope(genesis::envelope::Envelope::success(
+                env!("CARGO_PKG_VERSION"),
+                genesis::envelope::EnvelopeKind::Ok,
+                &report,
+                warnings,
+                Vec::new(),
+            ))
+        }
+        OutputFormat::Human => {
+            if verbosity.should_show(NORMAL_VERBOSITY) {
+                for file in &report.files {
+                    let state = if file.found { "found" } else { "missing" };
+                    println!("{state}: {} ({})", file.tool, file.marker);
+                }
+                for validation in &report.validations {
+                    println!(
+                        "{}: {}: {}",
+                        validation.severity, validation.field, validation.message
+                    );
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Run `podras feedback`: report an issue against podras's repository.
+///
+/// The request delegates to `genesis::feedback::handle_feedback` with
+/// podras's repo context; a dry run previews the body on stderr and the
+/// outcome lands in the envelope payload on stdout (JSON) or one message
+/// line (`--human`).
+pub fn feedback(
+    repo: &Path,
+    kind: &str,
+    title: Option<&str>,
+    dry_run: bool,
+    from_last_error: bool,
+    format: OutputFormat,
+    verbosity: Verbosity,
+) -> Result<()> {
+    let data = crate::feedback::run(repo, kind, title, dry_run, from_last_error)?;
+    match format {
+        OutputFormat::Json => print_genesis_envelope(genesis::envelope::Envelope::success(
+            env!("CARGO_PKG_VERSION"),
+            genesis::envelope::EnvelopeKind::Ok,
+            &data,
+            Vec::new(),
+            Vec::new(),
+        )),
+        OutputFormat::Human => {
+            if verbosity.should_show(NORMAL_VERBOSITY) {
+                println!("{}", data.message);
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Run `podras status`: aggregate podras's health surfaces into one report.
+///
+/// Status is read-only and never fails on a degraded repository: sections
+/// carry the observed health and the command exits 0. Output is a JSON
+/// envelope on non-TTY (or `--json`) and section lines with `--human`.
+pub fn status(repo: &Path, format: OutputFormat, verbosity: Verbosity) -> Result<()> {
+    let report = crate::status::build(repo)?;
+    let report = crate::status::StatusReport::from_multi(report);
+    match format {
+        OutputFormat::Json => print_genesis_envelope(report.to_envelope(env!("CARGO_PKG_VERSION"))),
+        OutputFormat::Human => {
+            if verbosity.should_show(NORMAL_VERBOSITY) {
+                let summary = report.summary;
+                println!(
+                    "podras status: {} tools, {} healthy, {} warning, {} error",
+                    summary.total, summary.healthy, summary.warnings, summary.errors
+                );
+                for section in &report.sections {
+                    let level = if section.level.is_error() {
+                        "error"
+                    } else if section.level.is_issue() {
+                        "warning"
+                    } else {
+                        "healthy"
+                    };
+                    println!("  {}: {} ({})", section.tool, section.summary, level);
+                    for item in &section.items {
+                        println!("    {}: {}", item.label, item.value);
+                    }
+                    for suggestion in &section.suggestions {
+                        println!("    -> {suggestion}");
+                    }
+                }
+            }
+            Ok(())
+        }
+    }
 }
