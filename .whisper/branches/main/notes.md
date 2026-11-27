@@ -398,4 +398,23 @@
   ## Next action
   Pushed. User picks next thread: CORR-003 as deliberate change (admit epic-id soft-check), fixture authored_with regeneration, exercise ah check --run-tests, or new work.
   ## References
-  openspec/changes/archive/2026-11-19-update-stale-stage-framing/; podras-6gq (closed). (supersedes 5224a759113bc58568995d7625a176db6bc0651ef68d5ed2015fd93aae2cdc74)
+  openspec/changes/archive/2026-11-19-update-stale-stage-framing/; podras-6gq (closed). (supersedes 5224a759113bc58568995d7625a176db6bc0651ef68d5ed2015fd93aae2cdc74) (superseded by 322509e844558ce9ea1410625030d03fae42956134bb40ccbfd87e1f821fc1af)
+- 2026-11-19T20:21:45Z [id:322509e844558ce9ea1410625030d03fae42956134bb40ccbfd87e1f821fc1af] (#resume-podras-brief) Format: 1
+  2026-11-19T20:21:45Z | repo: charly-vibes/podras | branch: main | HEAD: 7d7d286 | session: podras-6gq-prose-2026-11-19
+  Task: podras-6gq prose follow-up fully landed and closed; handoff chain cleaned to a single automatic supersedes marker. Phase: DONE — idle, nothing in flight.
+  Previous entry: f31ca4aed907318b53aeb121696b630c1a167e21b16ac00aa58d13e2f1390116
+  ## Objective
+  Clear the rule-of-5 stale-stage-framing findings (CORR-001 HIGH escalate-to-human, CLAR-001 MEDIUM) tracked as podras-6gq, and clean the duplicate supersedes marker on this session's handoff.
+  ## State
+  - Commits landed and pushed: 1ea12f0 (prose fix, change archived as 2026-11-19-update-stale-stage-framing, beads export refreshed, handoff) and 7d7d286 (handoff re-append, single marker). origin/main in sync; bd dolt push done.
+  - roadmap-v1: Purpose states the stage ⑦ bet verbs (bet add|admit|defer|kill) are the only writers of .podras/roadmap.toml and stage ⑧ harvest only proposes advisory candidates; Read-only-lens requirement names the verbs. brief-v1 Non-Goals bullet uses ownership framing. Strict 500-char requirement limit respected (dropped ", stage ⑦" and "instead").
+  - podras-6gq closed; zero open beads; zero pending openspec changes; zero stashes.
+  - Superseded entry 5224a759 remains in history by append-only contract (cosmetic duplicate marker), superseded by this chain.
+  ## Validation (this session, post-edit)
+  openspec validate --specs --strict 2/2 and change --strict green; ah lint 0; ah check 0 (contract tests skipped — EDGE-001 LOW: ah check --run-tests never exercised); spk lint clean; brief-drift green. cargo test not run: narrative-only change, no code paths.
+  ## Constraints / authorization
+  Standing push authorization for podras only (exercised: 4cf1bf9..7d7d286). House: TDD red->green; spec changes via deliberate openspec change; agents never edit .podras/roadmap.toml; admission/deferral/kill human verbs.
+  ## Next action
+  User picks next thread: CORR-003 as deliberate change (admit epic-id soft-check), fixture authored_with regeneration, exercise ah check --run-tests, or new work.
+  ## References
+  openspec/changes/archive/2026-11-19-update-stale-stage-framing/; ticket podras-6gq (closed); handoff chain dcce15a4 -> 5224a759 -> f31ca4ae -> this entry. (supersedes f31ca4aed907318b53aeb121696b630c1a167e21b16ac00aa58d13e2f1390116)
