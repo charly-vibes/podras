@@ -12,3 +12,8 @@
 
 # Rust build output
 /target
+
+# kaya incremental build state and capture lock (local caches; ledger, seeds,
+# and projections are committed)
+.kaya/build-state.json
+.kaya/capture.lock
