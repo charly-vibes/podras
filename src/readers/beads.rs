@@ -62,8 +62,37 @@ struct RawDependency {
 /// Optional issue metadata.
 #[derive(Debug, Deserialize)]
 struct RawMetadata {
-    #[serde(rename = "files", default)]
+    /// File list; `bd export` sometimes stringifies the array into a JSON
+    /// string, so both shapes decode to the same list of strings.
+    #[serde(rename = "files", default, deserialize_with = "decode_files")]
     _files: Option<Vec<String>>,
+}
+
+/// Decode `metadata.files`, accepting a real array or a stringified one.
+///
+/// `bd export` can write the file list as a JSON-encoded string such as
+/// `"[\"docs/\",\".kaya/\"]"`. Any shape that does not yield an array of
+/// strings degrades to `None`: the brief never reads the file list, so a
+/// malformed value must not drop the whole row.
+fn decode_files<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    let value = match value {
+        serde_json::Value::String(inner) => {
+            serde_json::from_str::<serde_json::Value>(&inner).unwrap_or(serde_json::Value::Null)
+        }
+        other => other,
+    };
+    let files = value.as_array().map(|items| {
+        items
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .map(str::to_string)
+            .collect()
+    });
+    Ok(files)
 }
 
 /// One tracker record as the roadmap lens consumes it.

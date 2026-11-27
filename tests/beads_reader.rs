@@ -249,6 +249,86 @@ fn empty_export_falls_back_to_file_mtime() {
 }
 
 #[test]
+fn beads_reader_accepts_stringified_file_lists() {
+    let repo = TempRepo::new();
+    // Live-export shapes: one row carries `metadata.files` as a real array,
+    // the other as the JSON-encoded string `bd export` sometimes writes, plus
+    // a dependency edge carrying the extra keys the live file includes.
+    let rows = vec![
+        json!({
+            "_type": "issue",
+            "id": "array-files",
+            "title": "files as an array",
+            "status": "open",
+            "priority": 2,
+            "created_at": "2026-11-10T00:00:00Z",
+            "updated_at": "2026-11-11T00:00:00Z",
+            "dependencies": [],
+            "metadata": { "files": ["docs/"] }
+        }),
+        json!({
+            "_type": "issue",
+            "id": "stringified-files",
+            "title": "files as a string",
+            "status": "open",
+            "priority": 2,
+            "created_at": "2026-11-10T00:00:00Z",
+            "updated_at": "2026-11-11T00:00:00Z",
+            "dependencies": [
+                { "issue_id": "stringified-files", "depends_on_id": "array-files", "type": "relates_to", "created_at": "2026-11-10T01:00:00Z", "created_by": "kaya", "metadata": "{}" }
+            ],
+            "metadata": { "files": "[\"docs/\",\".kaya/\"]", "base_commit": "7d7d286ac5eaf6c51c6fa4514de19c51d159a000" }
+        }),
+        json!({
+            "_type": "issue",
+            "id": "unusable-files",
+            "title": "stringified files that are not an array",
+            "status": "open",
+            "priority": 2,
+            "created_at": "2026-11-10T00:00:00Z",
+            "updated_at": "2026-11-11T00:00:00Z",
+            "dependencies": [],
+            "metadata": { "files": "not a json array" }
+        }),
+        json!({
+            "_type": "note",
+            "id": "ignored-note",
+            "body": "not an issue"
+        }),
+    ];
+    let body = rows
+        .iter()
+        .map(|row| serde_json::to_string(row).expect("serialize fixture row"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    repo.write(".beads/issues.jsonl", &format!("{body}\n"));
+
+    let read = beads::read(&context(&repo), day("2026-11-18"));
+    let data = read.data.as_ref().expect("present export yields data");
+
+    assert_eq!(read.status.status, SourceState::Present);
+    // Both file-list shapes parse: no row is skipped as malformed.
+    assert!(
+        read.warnings.is_empty(),
+        "stringified file lists must not count as malformed: {:?}",
+        read.warnings
+    );
+    assert_eq!(
+        ids(&data.open),
+        vec!["array-files", "stringified-files", "unusable-files"]
+    );
+    // The malformed file list degrades to no files, never to a dropped row.
+    assert_eq!(
+        data.observed_at,
+        Some(
+            Utc.with_ymd_and_hms(2026, 11, 11, 0, 0, 0)
+                .single()
+                .expect("fixture instant is valid")
+        )
+    );
+}
+
+#[test]
 fn beads_reader_missing_export_reports_missing() {
     let repo = TempRepo::new();
 
