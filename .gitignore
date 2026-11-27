@@ -20,3 +20,6 @@
 
 # mdBook build output (the Docs workflow builds and uploads it fresh)
 /book/
+
+# OpenSpec spec copies are CI build artifacts (docs.yml copies them at build time)
+docs/src/specs/
