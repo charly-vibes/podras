@@ -424,3 +424,28 @@ Landed genesis module adoption (doctor, config, feedback, guide, status) through
 Orchestrator fixes after subagent delivery (LuckyGazelle): ConfigFile::path must return repo_root.join(marker) (src/config.rs); dry-run test expectation corrected to genesis 0.13.2's FallbackUrl contract (tests/feedback.rs); status JSON payload wraps genesis's computed summary via podras StatusReport (src/status.rs).
 ## Next action
 Next: pick a thread — podras-ite (bd export double-encodes metadata.files as JSON string; breaks podras beads reader, brief reports '5 malformed lines') or the podras-x5x kaya chain (x5x.1 bootstrap first). No in_progress claims.
+- 2026-11-27T20:26:17Z [id:5a17b776bd2333a3b3786bd3103248e15594b19f993c3138f9e13070b84349e4] (#resume-beads-8641) Format: 1
+  Timestamp: 2026-11-27T20:16:00Z
+  Repo: charly-vibes/podras (branch main, HEAD ccaf090, tree clean, origin in sync)
+  Session: continuation of podras session (podras-yfx landed 34438a2; podras-ite healed ccaf090)
+  Previous entry: none
+  
+  Objective: upstream guard for beads metadata corruption (filing tools silently storing JSON-stringified containers, e.g. metadata.files as "[\"docs/\"]"); tracked as gastownhall/beads#8641.
+  
+  Phase: review/wait — evidence filed, no PR opened.
+  
+  State:
+  - podras store healed: 5 kaya rows rewritten via bd update --metadata (files real arrays), export canonical, podras brief reports beads fresh with no malformed-line detail. Landed ccaf090 (chore(record) commit) and pushed; podras-ite closed with correction + parked notes (bd-primary).
+  - Root cause corrected on record: bd export does NOT double-encode; it round-trips the store faithfully. Strings entered at filing time (kaya-adoption chain da61774 filed with pre-stringified arrays).
+  - Fresh clone of gastownhall/beads at ~/para/areas/dev/gh/charly/beads (main, 0c9c8e697), untouched, ready for a PR.
+  - Upstream issue body passed beads's gh-body-lint; signed agent contribution policy applies (Agent-Signature trailer, conventional commits, bazel test lanes).
+  
+  Next action: none until upstream responds. When beads#8641 gets maintainer direction on the guard (create-time validation vs doctor check), implement in the clone, TDD, run bazel test lanes per beads AGENTS.md, PR against main.
+  
+  Constraints/authorization:
+  - Push authorization is podras-only. Do NOT push branches or open PRs on gastownhall/beads without explicit user go-ahead.
+  - Do not self-assign the guard design; coercion/rejection of string metadata has tradeoffs (legitimate strings can start with '[').
+  
+  Unresolved: none blocking. Open podras threads if returning: CORR-003 (deliberate openspec change, from older handoff) and remaining genesis fleet-adoption rows (sunshine, funkalization-62, bajan bump, wildcard wrap v1) per add-fleet-adoption-plan tasks.
+  
+  Validation: podras brief beads source fresh (verified target binary); bd export grep shows zero stringified files values; git push succeeded (8ab605c..ccaf090).
