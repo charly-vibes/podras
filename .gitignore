@@ -17,3 +17,6 @@
 # and projections are committed)
 .kaya/build-state.json
 .kaya/capture.lock
+
+# mdBook build output (the Docs workflow builds and uploads it fresh)
+/book/
