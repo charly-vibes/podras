@@ -49,6 +49,12 @@ jobs:
         run: |
           cargo install --locked pretender@0.11.1 wai-cli@2026.11.11 dont-cli@0.2.2 testaruda@0.5.9
           npm install -g @fission-ai/openspec@0.19.0
+
+      # The record consumes an installed kaya (SEC-06: pinned like every other
+      # ecosystem tool — a broken upstream release cannot break this repo's CI).
+      - name: Install kaya (pinned)
+        run: cargo install --locked kaya@0.4.1
+
       - name: Install bd (beads, pinned §4, checksum-verified)
         run: |
           tmp=$(mktemp -d)
@@ -61,6 +67,14 @@ jobs:
           # which must not clobber the repo checkout
           tar -xzf "$tmp/bd.tgz" -C "$tmp" bd
           sudo mv "$tmp/bd" /usr/local/bin/bd
+
+      # Run the record gates: warn on pull requests, fail on main.
+      # This is the same `just record-check` developers run locally.
+      - name: Run record gates
+        run: |
+          mode=warn
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then mode=fail; fi
+          just record-check "$mode"
 
       # Run the exact same command as local development
       - name: Run CI pipeline

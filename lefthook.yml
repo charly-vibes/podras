@@ -14,6 +14,12 @@ pre-commit:
       run: spk lint openspec/specs || test $? -eq 2
     # ddl:managed:end (pre-commit)
 
+    # Record gate: fail the commit when staged-authored entries are stale in the
+    # committed ledger. Kept outside the ddl:managed blocks so `ddl init --gates`
+    # never owns it (same placement rationale as the brief-drift gate below).
+    record-verify-staged:
+      run: kaya check --index --fail-on-stale-authored
+
     # Opt-in committed-render drift gate. Uncomment after committing BRIEF.md and
     # BRIEF.json (regenerate with `podras brief --write`): the hook compares both
     # artifacts against a fresh render and exits 0 when this repository has no
@@ -32,3 +38,8 @@ pre-push:
     ddl-ah-check:
       run: ah check
     # ddl:managed:end (pre-push)
+
+    # Record gate: verify the record against its projections before pushing.
+    # Outside the ddl:managed blocks so `ddl init --gates` never owns it.
+    record-verify:
+      run: just record-verify
