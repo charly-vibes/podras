@@ -254,7 +254,7 @@ fn beads_reader_accepts_stringified_file_lists() {
     // Live-export shapes: one row carries `metadata.files` as a real array,
     // the other as the JSON-encoded string `bd export` sometimes writes, plus
     // a dependency edge carrying the extra keys the live file includes.
-    let rows = vec![
+    let rows = [
         json!({
             "_type": "issue",
             "id": "array-files",

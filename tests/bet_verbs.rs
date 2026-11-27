@@ -27,7 +27,7 @@ mod common;
 #[path = "roadmap/fixtures.rs"]
 mod fixtures;
 
-use fixtures::{EPIC_ID, TempRepo, full_roadmap, identity, podras_in, roadmap_file, BetSpec};
+use fixtures::{BetSpec, EPIC_ID, TempRepo, full_roadmap, identity, podras_in, roadmap_file};
 use podras::model::{BetStatus, Horizon};
 use podras::roadmap::file::{RoadmapFile, load};
 
@@ -215,9 +215,12 @@ fn bet_defer_requires_a_revive_trigger_and_stamps_the_review() {
 
     // Guard: deferring a shipped bet is rejected; killing is the only exit.
     let repo = fixtures::fixture_with_roadmap(&every_status_roadmap());
-    bet(&repo, &["defer", "bet-shipped", "--revive-when", "2027-02-01"])
-        .failure()
-        .stderr(predicates::str::contains("bet_invalid_transition"));
+    bet(
+        &repo,
+        &["defer", "bet-shipped", "--revive-when", "2027-02-01"],
+    )
+    .failure()
+    .stderr(predicates::str::contains("bet_invalid_transition"));
 }
 
 #[test]
@@ -245,12 +248,18 @@ fn bet_kill_is_legal_from_every_status() {
             .find(|bet| bet.id == id)
             .expect("the killed bet");
         assert_eq!(killed.status, BetStatus::Killed, "kill from {id}");
-        assert_eq!(killed.last_reviewed, "2026-11-18", "kill stamps last_reviewed");
+        assert_eq!(
+            killed.last_reviewed, "2026-11-18",
+            "kill stamps last_reviewed"
+        );
         assert_eq!(
             killed.review_or_kill, None,
             "review_or_kill is forbidden on killed"
         );
-        assert_eq!(killed.revive_when, None, "revive_when is forbidden on killed");
+        assert_eq!(
+            killed.revive_when, None,
+            "revive_when is forbidden on killed"
+        );
         assert_eq!(
             killed.killed_reason.as_deref(),
             if with_reason {
@@ -332,7 +341,11 @@ last_reviewed = "2026-11-01"
     bet(&repo, ADD_ARGS)
         .failure()
         .stderr(predicates::str::contains("roadmap_parse_error"));
-    assert_eq!(bytes(&repo), before, "a malformed file is never overwritten");
+    assert_eq!(
+        bytes(&repo),
+        before,
+        "a malformed file is never overwritten"
+    );
 
     // Semantic violations block the write as one aggregate error.
     let repo = fixtures::fixture_with_roadmap(&semantic);
@@ -458,7 +471,11 @@ fn bet_as_of_controls_the_stamped_dates() {
     let deferred = &loaded(&repo).bets[0];
     assert_eq!(deferred.last_reviewed, "2026-05-20");
 
-    podras_in(&repo, &["bet", "kill", "verb-lens", "--as-of", "2026-06-30"]).success();
+    podras_in(
+        &repo,
+        &["bet", "kill", "verb-lens", "--as-of", "2026-06-30"],
+    )
+    .success();
     let killed = &loaded(&repo).bets[0];
     assert_eq!(killed.last_reviewed, "2026-06-30");
 }
@@ -485,11 +502,7 @@ fn bet_verbs_require_a_scaffolded_roadmap_file() {
 fn bet_verbs_exit_zero_on_success_and_one_on_domain_error() {
     let repo = fixtures::fixture_with_roadmap(&identity_only());
 
-    let ok = bet(&repo, ADD_ARGS)
-        .success()
-        .get_output()
-        .status
-        .code();
+    let ok = bet(&repo, ADD_ARGS).success().get_output().status.code();
     assert_eq!(ok, Some(0), "success exits 0");
 
     let admitted = bet(
@@ -511,16 +524,22 @@ fn bet_verbs_exit_zero_on_success_and_one_on_domain_error() {
 
     let rejected = {
         // committed -> deferred is legal; a second defer is the guard hit.
-        bet(&repo, &["defer", "verb-lens", "--revive-when", "2027-01-15"])
-            .success()
-            .get_output()
-            .status
-            .code();
-        bet(&repo, &["defer", "verb-lens", "--revive-when", "2027-02-01"])
-            .failure()
-            .get_output()
-            .status
-            .code()
+        let _ = bet(
+            &repo,
+            &["defer", "verb-lens", "--revive-when", "2027-01-15"],
+        )
+        .success()
+        .get_output()
+        .status
+        .code();
+        bet(
+            &repo,
+            &["defer", "verb-lens", "--revive-when", "2027-02-01"],
+        )
+        .failure()
+        .get_output()
+        .status
+        .code()
     };
     assert_eq!(rejected, Some(1), "a domain error exits 1");
 

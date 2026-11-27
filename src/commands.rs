@@ -262,20 +262,8 @@ pub fn park(repo: &Path, id: &str, reason: &str, resurface: &str) -> Result<()> 
 }
 
 /// Append one shaping bet to the roadmap file (stage 7).
-pub fn bet_add(
-    repo: &Path,
-    id: &str,
-    title: &str,
-    outcome: &str,
-    horizon: &str,
-    appetite_weeks: u32,
-    owner: &str,
-    epic: Option<&str>,
-    as_of: NaiveDate,
-) -> Result<()> {
-    crate::verbs::bet::add(
-        repo, id, title, outcome, horizon, appetite_weeks, owner, epic, as_of,
-    )
+pub fn bet_add(repo: &Path, bet: crate::verbs::bet::AddBet, as_of: NaiveDate) -> Result<()> {
+    crate::verbs::bet::add(repo, bet, as_of)
 }
 
 /// Admit a shaping bet: the dated shaping-to-committed decision (stage 7).

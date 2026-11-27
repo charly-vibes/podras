@@ -32,22 +32,37 @@ use crate::roadmap::file::{self, BetEntry, RoadmapFile};
 
 /// Append one `shaping` bet, stamping `last_reviewed` with the decision date.
 ///
+/// The arguments of one `bet add` invocation, minus the repo path and the
+/// decision date. Groups the verb's seven descriptive parameters so the
+/// signature stays within clippy's arity gate.
+#[derive(Debug, Clone)]
+pub struct AddBet {
+    pub id: String,
+    pub title: String,
+    pub outcome: String,
+    pub horizon: String,
+    pub appetite_weeks: u32,
+    pub owner: String,
+    pub epic: Option<String>,
+}
+
+/// Append one `shaping` bet, stamping `last_reviewed` with the decision date.
+///
 /// The file must already exist and be valid: it is human-scaffolded, and no
 /// verb creates it. `admitted_at` stays absent; admission stamps it.
-pub fn add(
-    repo: &Path,
-    id: &str,
-    title: &str,
-    outcome: &str,
-    horizon: &str,
-    appetite_weeks: u32,
-    owner: &str,
-    epic: Option<&str>,
-    as_of: NaiveDate,
-) -> Result<()> {
+pub fn add(repo: &Path, bet: AddBet, as_of: NaiveDate) -> Result<()> {
+    let AddBet {
+        id,
+        title,
+        outcome,
+        horizon,
+        appetite_weeks,
+        owner,
+        epic,
+    } = &bet;
     let horizon = parse_horizon(horizon)?;
     let mut state = load_state(repo)?;
-    if state.bets.iter().any(|bet| bet.id == id) {
+    if state.bets.iter().any(|bet| bet.id == *id) {
         return Err(Error::Domain {
             code: "bet_invalid",
             message: format!("bet `{id}` already exists; bet ids are unique"),
@@ -59,9 +74,9 @@ pub fn add(
         title: title.to_string(),
         outcome: outcome.to_string(),
         horizon,
-        appetite_weeks,
+        appetite_weeks: *appetite_weeks,
         owner: owner.to_string(),
-        epic: epic.map(str::to_string),
+        epic: epic.as_deref().map(str::to_string),
         status: BetStatus::Shaping,
         admitted_at: None,
         last_reviewed: stamp(as_of),

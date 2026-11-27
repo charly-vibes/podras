@@ -212,14 +212,15 @@ fn bet_warnings(
                 detail: format!("epic `{}` is closed while the bet is active", record.id),
             });
         }
-        if active && let Some(idle_days) = epic_idle_days(record, evaluation_date) {
-            if idle_days > SIGNAL_HORIZON_DAYS {
-                warnings.push(RoadmapWarning {
-                    code: RoadmapWarningKind::BetNoTransition,
-                    subject: bet.id.clone(),
-                    detail: format!("epic `{}` has not changed in {idle_days}d", record.id),
-                });
-            }
+        if active
+            && let Some(idle_days) = epic_idle_days(record, evaluation_date)
+            && idle_days > SIGNAL_HORIZON_DAYS
+        {
+            warnings.push(RoadmapWarning {
+                code: RoadmapWarningKind::BetNoTransition,
+                subject: bet.id.clone(),
+                detail: format!("epic `{}` has not changed in {idle_days}d", record.id),
+            });
         }
     }
 

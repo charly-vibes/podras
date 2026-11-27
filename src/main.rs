@@ -256,13 +256,15 @@ fn bet(repo: &std::path::Path, action: BetAction) -> podras::Result<()> {
     match action {
         BetAction::Add(args) => podras::commands::bet_add(
             repo,
-            &args.id,
-            &args.title,
-            &args.outcome,
-            &args.horizon,
-            args.appetite_weeks,
-            &args.owner,
-            args.epic.as_deref(),
+            podras::verbs::bet::AddBet {
+                id: args.id,
+                title: args.title,
+                outcome: args.outcome,
+                horizon: args.horizon,
+                appetite_weeks: args.appetite_weeks,
+                owner: args.owner,
+                epic: args.epic,
+            },
             as_of_arg(&args.as_of),
         ),
         BetAction::Admit(args) => podras::commands::bet_admit(
@@ -272,12 +274,9 @@ fn bet(repo: &std::path::Path, action: BetAction) -> podras::Result<()> {
             &args.review_or_kill,
             as_of_arg(&args.as_of),
         ),
-        BetAction::Defer(args) => podras::commands::bet_defer(
-            repo,
-            &args.id,
-            &args.revive_when,
-            as_of_arg(&args.as_of),
-        ),
+        BetAction::Defer(args) => {
+            podras::commands::bet_defer(repo, &args.id, &args.revive_when, as_of_arg(&args.as_of))
+        }
         BetAction::Kill(args) => podras::commands::bet_kill(
             repo,
             &args.id,

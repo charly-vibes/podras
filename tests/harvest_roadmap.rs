@@ -222,7 +222,13 @@ fn harvest_runs_on_fixture_repo_with_each_retire_or_reshape_trigger() {
         )
         .replace("appetite_weeks = 6", "appetite_weeks = 2"),
         // Idle epic: last transition 2026-10-01, well past fourteen days.
-        bet("bet-idle", "building", "now", Some(IDLE_EPIC_ID), "2026-11-10"),
+        bet(
+            "bet-idle",
+            "building",
+            "now",
+            Some(IDLE_EPIC_ID),
+            "2026-11-10",
+        ),
         // Closed epic under a non-terminal bet.
         bet(
             "bet-closed",
@@ -259,12 +265,7 @@ fn harvest_runs_on_fixture_repo_with_each_retire_or_reshape_trigger() {
     // shaping), then admitted_at, then id — the file order above defeats it.
     let ids: Vec<&str> = summaries
         .iter()
-        .map(|summary| {
-            summary
-                .split('`')
-                .nth(1)
-                .expect("summary names the bet id")
-        })
+        .map(|summary| summary.split('`').nth(1).expect("summary names the bet id"))
         .collect();
     assert_eq!(
         ids,
@@ -328,7 +329,11 @@ fn harvest_runs_on_fixture_repo_with_unadmitted_shaping_bet() {
     with_roadmap(
         &repo,
         &identity(Some("2027-05-18")),
-        &[unadmitted_bet("bet-unadmitted", "now", Some(CLOSED_EPIC_ID))],
+        &[unadmitted_bet(
+            "bet-unadmitted",
+            "now",
+            Some(CLOSED_EPIC_ID),
+        )],
     );
     let candidates = candidates_of(&run_harvest(&repo));
     let retire = kind_candidates(&candidates, "retire_or_reshape");
@@ -357,7 +362,13 @@ fn harvest_roadmap_run_writes_nothing() {
             "2026-09-01",
         )
         .replace("appetite_weeks = 6", "appetite_weeks = 2"),
-        bet("bet-closed", "shaping", "later", Some(CLOSED_EPIC_ID), "2026-11-10"),
+        bet(
+            "bet-closed",
+            "shaping",
+            "later",
+            Some(CLOSED_EPIC_ID),
+            "2026-11-10",
+        ),
     ];
     with_roadmap(&repo, &identity(Some("2026-11-01")), &bets);
     let before = repo.tree_snapshot();
@@ -387,8 +398,20 @@ fn harvest_roadmap_run_twice_on_fixture_repo() {
             "2026-09-01",
         )
         .replace("appetite_weeks = 6", "appetite_weeks = 2"),
-        bet("bet-idle", "deferred", "next", Some(IDLE_EPIC_ID), "2026-11-08"),
-        bet("bet-closed", "shaping", "later", Some(CLOSED_EPIC_ID), "2026-11-10"),
+        bet(
+            "bet-idle",
+            "deferred",
+            "next",
+            Some(IDLE_EPIC_ID),
+            "2026-11-08",
+        ),
+        bet(
+            "bet-closed",
+            "shaping",
+            "later",
+            Some(CLOSED_EPIC_ID),
+            "2026-11-10",
+        ),
     ];
     with_roadmap(&repo, &identity(Some("2026-11-01")), &bets);
     let first = run_harvest(&repo);
@@ -399,7 +422,8 @@ fn harvest_roadmap_run_twice_on_fixture_repo() {
         payload
     };
     assert_eq!(
-        strip(&first), strip(&second),
+        strip(&first),
+        strip(&second),
         "two runs at one --as-of emit the same candidate set in the same order"
     );
     let candidates = candidates_of(&first);

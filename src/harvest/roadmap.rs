@@ -27,8 +27,8 @@ use crate::error::Error;
 use crate::health::links::SIGNAL_HORIZON_DAYS;
 use crate::model::{BetStatus, SourceName, Warning};
 use crate::readers::beads::{IssueRecord, read_records};
-use crate::roadmap::{circuit_breaker_overrun, epic_idle_days, epic_record};
 use crate::roadmap::file::{BetEntry, RoadmapFile, load};
+use crate::roadmap::{circuit_breaker_overrun, epic_idle_days, epic_record};
 
 /// Evidence ref citing the human-owned roadmap state file.
 const ROADMAP_REF: &str = ".podras/roadmap.toml";
@@ -166,9 +166,8 @@ fn retire_or_reshape(
         rank: status_rank(bet.status),
         // Unadmitted bets sort by their last review, keeping the order total
         // and deterministic without inventing an admission date.
-        sort_key: admitted_at.unwrap_or_else(|| {
-            parse_human_date(&bet.last_reviewed).unwrap_or(evaluation_date)
-        }),
+        sort_key: admitted_at
+            .unwrap_or_else(|| parse_human_date(&bet.last_reviewed).unwrap_or(evaluation_date)),
         id: bet.id.clone(),
         candidate: Candidate {
             kind: CandidateKind::RetireOrReshape,
